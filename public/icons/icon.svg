@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#09090b"/>
+  <g transform="translate(128, 80) scale(1.4)">
+    <!-- Metronome body -->
+    <path d="M45 180h90l-27-135H72l-27 135z" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Pendulum -->
+    <path d="M90 144l45-90" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round"/>
+    <!-- Pendulum weight -->
+    <circle cx="135" cy="54" r="13.5" fill="#22c55e"/>
+  </g>
+</svg>

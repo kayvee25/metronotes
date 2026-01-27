@@ -172,7 +172,7 @@ export default function EditMode({
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => onBpmChange(bpm - 1)}
-              className="w-8 h-12 flex-shrink-0 rounded-l-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] active:scale-95 transition-all flex items-center justify-center"
+              className="w-6 h-12 flex-shrink-0 rounded-l-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] active:scale-95 transition-all flex items-center justify-center"
               aria-label="Decrease BPM"
             >
               <svg
@@ -209,7 +209,7 @@ export default function EditMode({
 
             <button
               onClick={() => onBpmChange(bpm + 1)}
-              className="w-8 h-12 flex-shrink-0 rounded-r-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] active:scale-95 transition-all flex items-center justify-center"
+              className="w-6 h-12 flex-shrink-0 rounded-r-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] active:scale-95 transition-all flex items-center justify-center"
               aria-label="Increase BPM"
             >
               <svg

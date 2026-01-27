@@ -6,9 +6,35 @@ interface KeySelectorProps {
   value: string;
   onChange: (key: string) => void;
   className?: string;
+  compact?: boolean;
 }
 
-export default function KeySelector({ value, onChange, className = '' }: KeySelectorProps) {
+export default function KeySelector({ value, onChange, className = '', compact = false }: KeySelectorProps) {
+  if (compact) {
+    return (
+      <div className={`relative flex flex-col items-center justify-center bg-[var(--card)] border border-[var(--border)] rounded-lg ${className}`}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        >
+          <option value="">-</option>
+          {MUSICAL_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {key}
+            </option>
+          ))}
+        </select>
+        <span className="text-lg font-bold text-[var(--foreground)] leading-tight pointer-events-none">
+          {value || '-'}
+        </span>
+        <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider pointer-events-none">
+          Key
+        </span>
+      </div>
+    );
+  }
+
   return (
     <select
       value={value}

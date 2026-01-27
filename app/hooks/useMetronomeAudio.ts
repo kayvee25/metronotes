@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { BPM, TIME_SIGNATURE, AUDIO, ANIMATION } from '../lib/constants';
 
 interface UseMetronomeAudioOptions {
   initialBpm?: number;
@@ -25,7 +26,7 @@ interface UseMetronomeAudioReturn {
 }
 
 export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMetronomeAudioReturn {
-  const { initialBpm = 120, initialTimeSignature = '4/4', initialVolume = 0.7 } = options;
+  const { initialBpm = BPM.DEFAULT, initialTimeSignature = TIME_SIGNATURE.DEFAULT, initialVolume = AUDIO.DEFAULT_VOLUME } = options;
 
   const [bpm, setBpm] = useState(initialBpm);
   const [timeSignature, setTimeSignature] = useState(initialTimeSignature);
@@ -36,7 +37,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextNoteTimeRef = useRef<number>(0);
-  const scheduleAheadTimeRef = useRef<number>(0.1);
+  const scheduleAheadTimeRef = useRef<number>(AUDIO.SCHEDULE_AHEAD_TIME);
   const currentBeatRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const schedulerRef = useRef<(() => void) | undefined>(undefined);
@@ -82,10 +83,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
-    const pitchMultiplier = Math.pow(2, 7 / 12);
-    const baseFreqAccent = 800 * pitchMultiplier;
-    const baseFreqRegular = 600 * pitchMultiplier;
-    oscillator.frequency.value = isAccent ? baseFreqAccent : baseFreqRegular;
+    oscillator.frequency.value = isAccent ? AUDIO.FREQUENCY.ACCENT : AUDIO.FREQUENCY.REGULAR;
     oscillator.type = 'sine';
 
     const currentVolume = volumeRef.current;
@@ -93,7 +91,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
 
     gainNode.gain.setValueAtTime(0, scheduledTime);
     gainNode.gain.linearRampToValueAtTime(targetGain, scheduledTime + 0.001);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, scheduledTime + 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, scheduledTime + AUDIO.CLICK_DURATION);
 
     oscillator.connect(gainNode);
     gainNode.connect(ctx.destination);
@@ -109,7 +107,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
 
       if (sound) {
         sound.oscillator.start(time);
-        sound.oscillator.stop(time + 0.1);
+        sound.oscillator.stop(time + AUDIO.CLICK_DURATION);
       }
     },
     [createClickSound]
@@ -130,7 +128,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
 
         setCurrentBeat(currentBeatRef.current);
         setIsBeating(true);
-        setTimeout(() => setIsBeating(false), 100);
+        setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
 
         nextNoteTimeRef.current += secondsPerBeat;
         currentBeatRef.current = (currentBeatRef.current + 1) % beats;
@@ -153,7 +151,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
 
       const ctx = audioContextRef.current;
       if (ctx && schedulerRef.current) {
-        nextNoteTimeRef.current = ctx.currentTime + 0.1;
+        nextNoteTimeRef.current = ctx.currentTime + AUDIO.SCHEDULE_AHEAD_TIME;
         currentBeatRef.current = 0;
         animationFrameRef.current = requestAnimationFrame(schedulerRef.current);
       }
@@ -173,7 +171,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
   }, [isPlaying]);
 
   const handleBpmChange = useCallback((newBpm: number) => {
-    const clampedBpm = Math.max(30, Math.min(300, newBpm));
+    const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, newBpm));
     setBpm(clampedBpm);
   }, []);
 

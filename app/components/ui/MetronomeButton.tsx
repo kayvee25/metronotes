@@ -1,0 +1,67 @@
+'use client';
+
+interface MetronomeButtonProps {
+  isPlaying: boolean;
+  onClick: () => void;
+  size?: 'sm' | 'md' | 'lg';
+  variant?: 'round' | 'rect';
+  className?: string;
+}
+
+// Metronome icon SVG paths
+const MetronomeIcon = ({ className }: { className: string }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M5 20h14l-3-15H8l-3 15z" />
+    <path d="M12 16l5-10" />
+    <circle cx="17" cy="6" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+// Pause/Stop icon
+const PauseIcon = ({ className }: { className: string }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <rect x="6" y="6" width="4" height="12" />
+    <rect x="14" y="6" width="4" height="12" />
+  </svg>
+);
+
+const sizeClasses = {
+  sm: { button: 'w-10 h-10', icon: 'w-5 h-5' },
+  md: { button: 'h-10', icon: 'w-6 h-6' },
+  lg: { button: 'w-14 h-14', icon: 'w-8 h-8' },
+};
+
+export default function MetronomeButton({
+  isPlaying,
+  onClick,
+  size = 'md',
+  variant = 'rect',
+  className = '',
+}: MetronomeButtonProps) {
+  const { button, icon } = sizeClasses[size];
+  const shapeClass = variant === 'round' ? 'rounded-full' : 'rounded-xl';
+
+  return (
+    <button
+      onClick={onClick}
+      className={`${button} ${shapeClass} flex items-center justify-center gap-2 transition-all active:scale-95 ${
+        isPlaying ? 'bg-red-500' : 'bg-[var(--accent-green)]'
+      } ${className}`}
+      aria-label={isPlaying ? 'Stop' : 'Start'}
+    >
+      {isPlaying ? (
+        <PauseIcon className={`${icon} text-white`} />
+      ) : (
+        <MetronomeIcon className={`${icon} text-white`} />
+      )}
+    </button>
+  );
+}

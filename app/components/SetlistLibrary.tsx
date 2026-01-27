@@ -70,7 +70,7 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Setlists</h1>
         <button
           onClick={() => setShowForm(true)}

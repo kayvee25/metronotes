@@ -42,7 +42,7 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Songs</h1>
       </header>
 
@@ -92,7 +92,7 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
                   />
                 </svg>
                 <p className="text-[var(--muted)] mb-2">No songs yet</p>
-                <p className="text-sm text-[var(--muted)]">Tap the New tab to create one</p>
+                <p className="text-sm text-[var(--muted)]">Tap the Play tab to create one</p>
               </>
             ) : (
               <p className="text-[var(--muted)]">No songs match your search</p>

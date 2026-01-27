@@ -1,0 +1,50 @@
+name: Sync to Vercel Repo
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+        with:
+          path: source
+          fetch-depth: 0
+
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: kayvee25/metronotes-vercel
+          token: ${{ secrets.VERCEL_REPO_PAT }}
+          path: target
+          fetch-depth: 0
+
+      - name: Sync files
+        run: |
+          # Remove all files from target except .git
+          cd target
+          find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
+          cd ..
+
+          # Copy all files from source to target (except .git)
+          rsync -av --exclude='.git' source/ target/
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.VERCEL_REPO_PAT }}
+          path: target
+          commit-message: "Sync from main repo: ${{ github.event.head_commit.message }}"
+          branch: sync-from-main
+          delete-branch: true
+          title: "Sync from main repo"
+          body: |
+            Automated sync from the main development repository.
+
+            **Source commit:** ${{ github.sha }}
+            **Commit message:** ${{ github.event.head_commit.message }}
+          labels: automated-sync

@@ -30,6 +30,7 @@ interface EditModeProps {
   onSwitchToPerformance: () => void;
   onOpenTimeSigModal: () => void;
   onSave: () => void;
+  isDirty?: boolean;
 }
 
 export default function EditMode({
@@ -55,6 +56,7 @@ export default function EditMode({
   onSwitchToPerformance,
   onOpenTimeSigModal,
   onSave,
+  isDirty = true,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -148,7 +150,10 @@ export default function EditMode({
 
         <button
           onClick={onSave}
-          className="px-4 py-2 rounded-xl bg-[var(--accent-blue)] text-white font-semibold active:scale-95 transition-all"
+          disabled={!isDirty}
+          className={`px-4 py-2 rounded-xl bg-[var(--accent-blue)] text-white font-semibold transition-all ${
+            isDirty ? 'active:scale-95' : 'opacity-50 pointer-events-none'
+          }`}
         >
           Save
         </button>

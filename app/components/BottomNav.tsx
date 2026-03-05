@@ -1,23 +1,14 @@
 'use client';
 
 interface BottomNavProps {
-  activeTab: 'new' | 'songs' | 'setlists';
-  onTabChange: (tab: 'new' | 'songs' | 'setlists') => void;
+  activeTab: 'songs' | 'setlists';
+  onTabChange: (tab: 'songs' | 'setlists') => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
 }
 
 export default function BottomNav({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: BottomNavProps) {
   const tabs = [
-    {
-      id: 'new' as const,
-      label: 'Play',
-      icon: (
-        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-      )
-    },
     {
       id: 'songs' as const,
       label: 'Songs',

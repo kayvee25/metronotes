@@ -1,11 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Setlist, SetlistInput } from '../types';
 import { useSetlists } from '../hooks/useSetlists';
 import { useSongs } from '../hooks/useSongs';
 import SetlistForm from './SetlistForm';
 import SetlistDetail from './SetlistDetail';
+
+type SetlistSortOption = 'name-az' | 'name-za' | 'recent-created' | 'recent-updated';
+
+const SORT_OPTIONS: { value: SetlistSortOption; label: string }[] = [
+  { value: 'name-az', label: 'Name A-Z' },
+  { value: 'name-za', label: 'Name Z-A' },
+  { value: 'recent-created', label: 'Recently Created' },
+  { value: 'recent-updated', label: 'Recently Updated' },
+];
+
+function sortSetlists(setlists: Setlist[], sort: SetlistSortOption): Setlist[] {
+  const sorted = [...setlists];
+  switch (sort) {
+    case 'name-az':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case 'name-za':
+      return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    case 'recent-created':
+      return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    case 'recent-updated':
+      return sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    default:
+      return sorted;
+  }
+}
 
 interface SetlistLibraryProps {
   onPlaySetlist?: (setlist: Setlist, startIndex?: number) => void;
@@ -17,6 +42,38 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingSetlist, setEditingSetlist] = useState<Setlist | null>(null);
   const [viewingSetlist, setViewingSetlist] = useState<Setlist | null>(null);
+  const [sortOption, setSortOption] = useState<SetlistSortOption>(() => {
+    if (typeof window === 'undefined') return 'name-az';
+    try {
+      const saved = localStorage.getItem('metronotes_setlists_sort');
+      if (saved && SORT_OPTIONS.some(o => o.value === saved)) {
+        return saved as SetlistSortOption;
+      }
+    } catch {}
+    return 'name-az';
+  });
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close sort menu on outside click
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setShowSortMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSortMenu]);
+
+  const handleSortChange = (option: SetlistSortOption) => {
+    setSortOption(option);
+    setShowSortMenu(false);
+    try {
+      localStorage.setItem('metronotes_setlists_sort', option);
+    } catch {}
+  };
 
   const handleCreateSetlist = (data: SetlistInput) => {
     const newSetlist = createSetlist(data);
@@ -37,14 +94,11 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
     }
   };
 
-  const getSongCount = (setlist: Setlist) => {
-    return setlist.songIds.length;
-  };
-
   const getTotalDuration = (setlist: Setlist) => {
-    // Placeholder - could calculate based on song durations if we add that field
     return `${setlist.songIds.length} songs`;
   };
+
+  const sortedSetlists = sortSetlists(setlists, sortOption);
 
   if (isLoading) {
     return (
@@ -72,25 +126,39 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Setlists</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="w-10 h-10 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center"
-        >
-          <svg
-            className="w-6 h-6 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        <div className="relative" ref={sortMenuRef}>
+          <button
+            onClick={() => setShowSortMenu(!showSortMenu)}
+            className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
+            aria-label="Sort setlists"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
+            <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+            </svg>
+          </button>
+          {showSortMenu && (
+            <div className="absolute right-0 top-12 w-52 bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-lg z-50 py-1 overflow-hidden">
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleSortChange(option.value)}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                    sortOption === option.value
+                      ? 'text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 font-medium'
+                      : 'text-[var(--foreground)] hover:bg-[var(--card)]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Setlist List */}
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-20">
-        {setlists.length === 0 ? (
+        {sortedSetlists.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <svg
               className="w-16 h-16 text-[var(--muted)] mb-4"
@@ -115,7 +183,7 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {setlists.map((setlist) => (
+            {sortedSetlists.map((setlist) => (
               <div
                 key={setlist.id}
                 className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 active:scale-[0.99] transition-all"
@@ -175,6 +243,17 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
           </div>
         )}
       </div>
+
+      {/* FAB */}
+      <button
+        onClick={() => setShowForm(true)}
+        className="fixed bottom-[80px] right-4 w-14 h-14 rounded-full bg-[var(--accent-blue)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
+        aria-label="Add setlist"
+      >
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
 
       {/* Setlist Form Modal */}
       {(showForm || editingSetlist) && (

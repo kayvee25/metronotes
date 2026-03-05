@@ -1,22 +1,97 @@
 'use client';
 
-import { useState } from 'react';
-import { Song } from '../types';
+import { useState, useEffect, useRef } from 'react';
+import { Song, SongInput } from '../types';
 import { useSongs } from '../hooks/useSongs';
+import { BPM, TIME_SIGNATURE, TIME_SIGNATURES } from '../lib/constants';
+import Modal from './ui/Modal';
+
+type SongSortOption = 'name-az' | 'name-za' | 'bpm-low' | 'bpm-high' | 'recent-added' | 'recent-updated';
+
+const SORT_OPTIONS: { value: SongSortOption; label: string }[] = [
+  { value: 'name-az', label: 'Name A-Z' },
+  { value: 'name-za', label: 'Name Z-A' },
+  { value: 'bpm-low', label: 'BPM (Low to High)' },
+  { value: 'bpm-high', label: 'BPM (High to Low)' },
+  { value: 'recent-added', label: 'Recently Added' },
+  { value: 'recent-updated', label: 'Recently Updated' },
+];
+
+function sortSongs(songs: Song[], sort: SongSortOption): Song[] {
+  const sorted = [...songs];
+  switch (sort) {
+    case 'name-az':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case 'name-za':
+      return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    case 'bpm-low':
+      return sorted.sort((a, b) => a.bpm - b.bpm);
+    case 'bpm-high':
+      return sorted.sort((a, b) => b.bpm - a.bpm);
+    case 'recent-added':
+      return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    case 'recent-updated':
+      return sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    default:
+      return sorted;
+  }
+}
 
 interface SongLibraryProps {
   onSelectSong?: (song: Song) => void;
+  onCreateSong?: (input: SongInput) => Song;
+  onQuickAddSong?: (song: Song) => void;
 }
 
-export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
+export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
   const { songs, isLoading, deleteSong } = useSongs();
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOption, setSortOption] = useState<SongSortOption>(() => {
+    if (typeof window === 'undefined') return 'name-az';
+    try {
+      const saved = localStorage.getItem('metronotes_songs_sort');
+      if (saved && SORT_OPTIONS.some(o => o.value === saved)) {
+        return saved as SongSortOption;
+      }
+    } catch {}
+    return 'name-az';
+  });
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  // Quick-add form state
+  const [qaName, setQaName] = useState('');
+  const [qaBpm, setQaBpm] = useState(String(BPM.DEFAULT));
+  const [qaTimeSig, setQaTimeSig] = useState<string>(TIME_SIGNATURE.DEFAULT);
+
+  // Close sort menu on outside click
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setShowSortMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSortMenu]);
+
+  const handleSortChange = (option: SongSortOption) => {
+    setSortOption(option);
+    setShowSortMenu(false);
+    try {
+      localStorage.setItem('metronotes_songs_sort', option);
+    } catch {}
+  };
 
   const filteredSongs = songs.filter(
     (song) =>
       song.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       song.artist?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const sortedSongs = sortSongs(filteredSongs, sortOption);
 
   const handleDeleteSong = (e: React.MouseEvent, song: Song) => {
     e.stopPropagation();
@@ -29,6 +104,23 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
     if (onSelectSong) {
       onSelectSong(song);
     }
+  };
+
+  const handleQuickAdd = () => {
+    const trimmedName = qaName.trim();
+    if (!trimmedName || !onCreateSong) return;
+    const bpmVal = parseInt(qaBpm) || BPM.DEFAULT;
+    const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpmVal));
+    const newSong = onCreateSong({
+      name: trimmedName,
+      bpm: clampedBpm,
+      timeSignature: qaTimeSig,
+    });
+    setShowQuickAdd(false);
+    setQaName('');
+    setQaBpm(String(BPM.DEFAULT));
+    setQaTimeSig(TIME_SIGNATURE.DEFAULT);
+    onQuickAddSong?.(newSong);
   };
 
   if (isLoading) {
@@ -44,6 +136,34 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Songs</h1>
+        <div className="relative" ref={sortMenuRef}>
+          <button
+            onClick={() => setShowSortMenu(!showSortMenu)}
+            className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
+            aria-label="Sort songs"
+          >
+            <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+            </svg>
+          </button>
+          {showSortMenu && (
+            <div className="absolute right-0 top-12 w-52 bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-lg z-50 py-1 overflow-hidden">
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleSortChange(option.value)}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                    sortOption === option.value
+                      ? 'text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 font-medium'
+                      : 'text-[var(--foreground)] hover:bg-[var(--card)]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Search */}
@@ -74,7 +194,7 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
 
       {/* Song List */}
       <div className="flex-1 overflow-y-auto px-4 pb-20">
-        {filteredSongs.length === 0 ? (
+        {sortedSongs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             {songs.length === 0 ? (
               <>
@@ -92,7 +212,7 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
                   />
                 </svg>
                 <p className="text-[var(--muted)] mb-2">No songs yet</p>
-                <p className="text-sm text-[var(--muted)]">Tap the Play tab to create one</p>
+                <p className="text-sm text-[var(--muted)]">Tap the + button to create one</p>
               </>
             ) : (
               <p className="text-[var(--muted)]">No songs match your search</p>
@@ -100,7 +220,7 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredSongs.map((song) => (
+            {sortedSongs.map((song) => (
               <div
                 key={song.id}
                 className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 active:scale-[0.99] transition-all"
@@ -152,6 +272,81 @@ export default function SongLibrary({ onSelectSong }: SongLibraryProps) {
           </div>
         )}
       </div>
+
+      {/* FAB */}
+      <button
+        onClick={() => setShowQuickAdd(true)}
+        className="fixed bottom-[80px] right-4 w-14 h-14 rounded-full bg-[var(--accent-blue)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
+        aria-label="Add song"
+      >
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+
+      {/* Quick-Add Modal */}
+      <Modal isOpen={showQuickAdd} onClose={() => setShowQuickAdd(false)} title="New Song">
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">
+              Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={qaName}
+              onChange={(e) => setQaName(e.target.value)}
+              placeholder="Song name"
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">
+              BPM
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={qaBpm}
+              onChange={(e) => setQaBpm(e.target.value.replace(/\D/g, ''))}
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">
+              Time Signature
+            </label>
+            <select
+              value={qaTimeSig}
+              onChange={(e) => setQaTimeSig(e.target.value)}
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-blue)] cursor-pointer"
+            >
+              {TIME_SIGNATURES.map((ts) => (
+                <option key={ts} value={ts}>{ts}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowQuickAdd(false)}
+            className="flex-1 h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleQuickAdd}
+            disabled={!qaName.trim()}
+            className="flex-1 h-12 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
+          >
+            Create
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

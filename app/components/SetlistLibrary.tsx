@@ -173,13 +173,8 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
                 d="M4 6h16M4 10h16M4 14h16M4 18h16"
               />
             </svg>
-            <p className="text-[var(--muted)] mb-4">No setlists yet</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-[var(--accent-blue)] text-white rounded-xl font-medium hover:brightness-110 active:scale-95 transition-all"
-            >
-              Create your first setlist
-            </button>
+            <p className="text-[var(--muted)] mb-2">No setlists yet</p>
+            <p className="text-sm text-[var(--muted)]">Tap the + button to add a setlist</p>
           </div>
         ) : (
           <div className="space-y-2">

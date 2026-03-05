@@ -212,7 +212,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
                   />
                 </svg>
                 <p className="text-[var(--muted)] mb-2">No songs yet</p>
-                <p className="text-sm text-[var(--muted)]">Tap the + button to create one</p>
+                <p className="text-sm text-[var(--muted)]">Tap the + button to add a song</p>
               </>
             ) : (
               <p className="text-[var(--muted)]">No songs match your search</p>

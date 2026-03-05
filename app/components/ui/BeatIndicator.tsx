@@ -23,7 +23,7 @@ export default function BeatIndicator({
           className={`w-3 h-3 rounded-full transition-all duration-${ANIMATION.BEAT_INDICATOR_MS} ${
             index === currentBeat && isBeating
               ? index === 0
-                ? 'bg-[var(--accent-blue)] scale-150'
+                ? 'bg-red-500 scale-150'
                 : 'bg-[var(--accent-green)] scale-150'
               : 'bg-[var(--card)]'
           }`}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Song, SongInput, Setlist } from '../types';
 import { useMetronomeAudio } from '../hooks/useMetronomeAudio';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
@@ -11,6 +11,10 @@ import SaveSongModal from './song/SaveSongModal';
 
 type Mode = 'performance' | 'edit';
 
+export interface SongViewHandle {
+  save: () => void;
+}
+
 interface SongViewProps {
   song?: Song | null;
   onBack: () => void;
@@ -20,6 +24,8 @@ interface SongViewProps {
   onPrevSong?: () => void;
   onNextSong?: () => void;
   showBack?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
+  initialEditMode?: boolean;
 }
 
 interface FormState {
@@ -30,20 +36,40 @@ interface FormState {
   mode: Mode;
 }
 
-function getInitialFormState(song?: Song | null): FormState {
+interface OriginalValues {
+  name: string;
+  artist: string;
+  bpm: number;
+  timeSignature: string;
+  musicalKey: string;
+  notes: string;
+}
+
+function getInitialFormState(song?: Song | null, initialEditMode?: boolean): FormState {
   if (song) {
     return {
       name: song.name,
       artist: song.artist || '',
       musicalKey: song.key || '',
       notes: song.notes || '',
-      mode: 'performance'
+      mode: initialEditMode ? 'edit' : 'performance'
     };
   }
   return { name: '', artist: '', musicalKey: '', notes: '', mode: 'edit' };
 }
 
-export default function SongView({
+function getOriginalValues(song?: Song | null): OriginalValues {
+  return {
+    name: song?.name || '',
+    artist: song?.artist || '',
+    bpm: song?.bpm || BPM.DEFAULT,
+    timeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT,
+    musicalKey: song?.key || '',
+    notes: song?.notes || '',
+  };
+}
+
+const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   song,
   onBack,
   onSave,
@@ -51,16 +77,15 @@ export default function SongView({
   songIndex = 0,
   onPrevSong,
   onNextSong,
-  showBack = true
-}: SongViewProps) {
-  // Combined form state to avoid cascading renders
-  const [formState, setFormState] = useState<FormState>(() => getInitialFormState(song));
-
-  // Modal state
+  showBack = true,
+  onDirtyChange,
+  initialEditMode = false,
+}, ref) {
+  const [formState, setFormState] = useState<FormState>(() => getInitialFormState(song, initialEditMode));
   const [showTimeSigModal, setShowTimeSigModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [savedValues, setSavedValues] = useState<OriginalValues>(() => getOriginalValues(song));
 
-  // Metronome audio
   const {
     bpm,
     timeSignature,
@@ -76,13 +101,28 @@ export default function SongView({
     initialTimeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT
   });
 
-  // Sync form state when song changes
-  useEffect(() => {
-    setFormState(getInitialFormState(song));
-  }, [song]);
+  // Note: When the song changes, App.tsx uses a key prop to remount this component
+  // so initialState functions handle the reset correctly.
 
-  // Destructure for convenience
+  // Compute dirty state
   const { name, artist, musicalKey, notes, mode } = formState;
+  const isDirty =
+    name !== savedValues.name ||
+    artist !== savedValues.artist ||
+    bpm !== savedValues.bpm ||
+    timeSignature !== savedValues.timeSignature ||
+    musicalKey !== savedValues.musicalKey ||
+    notes !== savedValues.notes;
+
+  // Notify parent of dirty state changes
+  const prevDirtyRef = useRef(false);
+  useEffect(() => {
+    if (prevDirtyRef.current !== isDirty) {
+      prevDirtyRef.current = isDirty;
+      onDirtyChange?.(isDirty);
+    }
+  }, [isDirty, onDirtyChange]);
+
   const setName = (name: string) => setFormState(s => ({ ...s, name }));
   const setArtist = (artist: string) => setFormState(s => ({ ...s, artist }));
   const setMusicalKey = (musicalKey: string) => setFormState(s => ({ ...s, musicalKey }));
@@ -91,7 +131,6 @@ export default function SongView({
 
   const handleSave = () => {
     if (song) {
-      // Update existing song
       onSave({
         name: name.trim() || song.name,
         artist: artist.trim() || undefined,
@@ -100,8 +139,15 @@ export default function SongView({
         key: musicalKey || undefined,
         notes: notes.trim() || undefined
       });
+      setSavedValues({
+        name: name.trim() || song.name,
+        artist: artist.trim(),
+        bpm,
+        timeSignature,
+        musicalKey,
+        notes: notes.trim(),
+      });
     } else {
-      // New song - show name modal if no name
       if (!name.trim()) {
         setShowSaveModal(true);
       } else {
@@ -130,7 +176,11 @@ export default function SongView({
     setShowSaveModal(false);
   };
 
-  // Render performance or edit mode
+  // Expose save method to parent via ref
+  useImperativeHandle(ref, () => ({
+    save: handleSave,
+  }));
+
   return (
     <>
       {mode === 'performance' ? (
@@ -177,10 +227,10 @@ export default function SongView({
           onSwitchToPerformance={() => setMode('performance')}
           onOpenTimeSigModal={() => setShowTimeSigModal(true)}
           onSave={handleSave}
+          isDirty={isDirty}
         />
       )}
 
-      {/* Modals */}
       <TimeSignatureModal
         isOpen={showTimeSigModal}
         onClose={() => setShowTimeSigModal(false)}
@@ -199,4 +249,6 @@ export default function SongView({
       />
     </>
   );
-}
+});
+
+export default SongView;

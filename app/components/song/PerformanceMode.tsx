@@ -47,7 +47,7 @@ export default function PerformanceMode({
   const hasNext = setlist && songIndex < (setlist.songIds.length - 1);
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--background)]">
+    <div className="flex flex-col h-screen bg-[var(--background)]">
       {/* Header */}
       <header className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
         {/* Back button */}

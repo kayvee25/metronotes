@@ -44,7 +44,7 @@ interface SongLibraryProps {
 }
 
 export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
-  const { songs, isLoading, deleteSong } = useSongs();
+  const { songs, isLoading, error, deleteSong, refresh } = useSongs();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SongSortOption>(() => {
     if (typeof window === 'undefined') return 'name-az';
@@ -136,6 +136,16 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Songs</h1>
+        <div className="flex items-center gap-1">
+        <button
+          onClick={refresh}
+          className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
+          aria-label="Refresh songs"
+        >
+          <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 4m16 16l-1.64-1.64A9 9 0 014.51 15" />
+          </svg>
+        </button>
         <div className="relative" ref={sortMenuRef}>
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
@@ -164,7 +174,16 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
             </div>
           )}
         </div>
+        </div>
       </header>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mx-4 mt-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-between">
+          <p className="text-sm text-red-500">{error}</p>
+          <button onClick={refresh} className="text-sm font-medium text-red-500 hover:underline ml-3 flex-shrink-0">Retry</button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="px-4 py-3">

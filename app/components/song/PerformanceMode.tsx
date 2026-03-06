@@ -92,8 +92,8 @@ export default function PerformanceMode({
         {/* Title */}
         <div className="flex-1 text-center min-w-0">
           {setlist && (
-            <p className="text-xs text-[var(--accent-blue)] font-medium truncate">
-              {setlist.name} ({songIndex + 1}/{setlist.songIds.length})
+            <p className="text-xs text-[var(--muted)] font-medium truncate">
+              {setlist.name} · {songIndex + 1} of {setlist.songIds.length}
             </p>
           )}
           <h1 className="text-lg font-bold text-[var(--foreground)] truncate">

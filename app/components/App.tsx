@@ -4,23 +4,33 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import SongView, { SongViewHandle } from './SongView';
 import SongLibrary from './SongLibrary';
 import SetlistLibrary from './SetlistLibrary';
-import BottomNav from './BottomNav';
+import Settings from './Settings';
+import BottomNav, { Tab } from './BottomNav';
+import AuthScreen from './AuthScreen';
+import EmailVerificationScreen from './EmailVerificationScreen';
 import { Song, Setlist, SongInput } from '../types';
 import { useSongs } from '../hooks/useSongs';
+import { useAuthProvider, AuthContext } from '../hooks/useAuth';
+import { migrateLocalToFirestore } from '../lib/firestore';
 
-type Tab = 'songs' | 'setlists';
 type NavigationSource = 'none' | 'songs' | 'setlists';
 type PendingNav = { type: 'tab'; tab: Tab } | { type: 'back' } | null;
 
-export default function App() {
+function getInitialDarkMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const saved = localStorage.getItem('metronotes_dark_mode');
+  if (saved !== null) return saved === 'true';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function AppInner() {
   const [activeTab, setActiveTab] = useState<Tab>('songs');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [showSongView, setShowSongView] = useState(false);
   const [activeSetlist, setActiveSetlist] = useState<Setlist | null>(null);
   const [setlistIndex, setSetlistIndex] = useState(0);
   const [navigationSource, setNavigationSource] = useState<NavigationSource>('none');
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(getInitialDarkMode);
   const [editModeOnOpen, setEditModeOnOpen] = useState(false);
   const { songs, createSong, updateSong } = useSongs();
 
@@ -30,36 +40,30 @@ export default function App() {
   const pendingNavRef = useRef<PendingNav>(null);
   const songViewRef = useRef<SongViewHandle>(null);
 
-  // Initialize dark mode after mount
+  // Sync dark mode to DOM and localStorage
   useEffect(() => {
-    setIsMounted(true);
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDarkMode(prefersDark);
-    if (prefersDark) {
-      document.documentElement.classList.add('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    localStorage.setItem('metronotes_dark_mode', String(isDarkMode));
+  }, [isDarkMode]);
+
+  // Android back button / browser back: popstate triggers back navigation from song view
+  const handleClearSongRef = useRef(() => {});
+  const showSongViewRef = useRef(false);
+
+  useEffect(() => {
+    const handler = () => {
+      if (showSongViewRef.current) {
+        handleClearSongRef.current();
+      }
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
   }, []);
 
-  // Dark mode toggle effect
-  useEffect(() => {
-    if (!isMounted) return;
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode, isMounted]);
-
-  // Update selected song when setlist index changes
-  useEffect(() => {
-    if (activeSetlist && activeSetlist.songIds.length > 0) {
-      const songId = activeSetlist.songIds[setlistIndex];
-      const song = songs.find((s) => s.id === songId);
-      if (song) {
-        setSelectedSong(song);
-      }
-    }
-  }, [activeSetlist, setlistIndex, songs]);
+  // Derive current song from setlist when in setlist mode
+  const currentSong = activeSetlist && activeSetlist.songIds.length > 0
+    ? songs.find(s => s.id === activeSetlist.songIds[setlistIndex]) ?? selectedSong
+    : selectedSong;
 
   const doNavigateBack = useCallback(() => {
     setSelectedSong(null);
@@ -77,6 +81,7 @@ export default function App() {
     setEditModeOnOpen(false);
     setShowSongView(true);
     setIsDirty(false);
+    history.pushState(null, '', '');
   };
 
   const handleClearSong = () => {
@@ -92,6 +97,12 @@ export default function App() {
     doNavigateBack();
   };
 
+  // Keep refs in sync for popstate handler
+  useEffect(() => {
+    handleClearSongRef.current = handleClearSong;
+    showSongViewRef.current = showSongView;
+  });
+
   const handlePlaySetlist = (setlist: Setlist, startIndex: number = 0) => {
     setActiveSetlist(setlist);
     setSetlistIndex(startIndex);
@@ -99,6 +110,7 @@ export default function App() {
     setEditModeOnOpen(false);
     setShowSongView(true);
     setIsDirty(false);
+    history.pushState(null, '', '');
   };
 
   const handlePrevSong = () => {
@@ -114,8 +126,8 @@ export default function App() {
   };
 
   const handleSaveSong = (data: SongInput) => {
-    if (selectedSong) {
-      const updated = updateSong(selectedSong.id, data);
+    if (currentSong) {
+      const updated = updateSong(currentSong.id, data);
       if (updated) {
         setSelectedSong(updated);
       }
@@ -126,7 +138,6 @@ export default function App() {
     }
     setIsDirty(false);
 
-    // If we were saving before navigating, do the navigation now
     const nav = pendingNavRef.current;
     if (nav) {
       pendingNavRef.current = null;
@@ -158,6 +169,7 @@ export default function App() {
     setEditModeOnOpen(true);
     setShowSongView(true);
     setIsDirty(false);
+    history.pushState(null, '', '');
   };
 
   const handleDirtyChange = useCallback((dirty: boolean) => {
@@ -213,9 +225,9 @@ export default function App() {
       <main>
         {showSongView ? (
           <SongView
-            key={selectedSong?.id ?? 'new'}
+            key={currentSong?.id ?? 'new'}
             ref={songViewRef}
-            song={selectedSong}
+            song={currentSong}
             onBack={handleClearSong}
             onSave={handleSaveSong}
             setlist={activeSetlist}
@@ -236,16 +248,19 @@ export default function App() {
               />
             )}
             {activeTab === 'setlists' && <SetlistLibrary onPlaySetlist={handlePlaySetlist} />}
+            {activeTab === 'settings' && (
+              <Settings
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+              />
+            )}
           </>
         )}
       </main>
 
-      {/* Bottom navigation */}
       <BottomNav
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        isDarkMode={isMounted ? isDarkMode : false}
-        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
       />
 
       {/* Unsaved changes dialog */}
@@ -282,5 +297,88 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  const authValue = useAuthProvider();
+  const [migrationState, setMigrationState] = useState<'idle' | 'migrating' | 'done'>('idle');
+  const migrationStarted = useRef(false);
+
+  // Migration: when user signs in, check for localStorage data and upload to Firestore
+  useEffect(() => {
+    if (authValue.authState !== 'authenticated' || !authValue.user || migrationStarted.current) return;
+    migrationStarted.current = true;
+
+    const runMigration = async () => {
+      const SONGS_KEY = 'metronotes_songs';
+      const SETLISTS_KEY = 'metronotes_setlists';
+      const songsData = localStorage.getItem(SONGS_KEY);
+      const setlistsData = localStorage.getItem(SETLISTS_KEY);
+
+      const hasLocalData =
+        (songsData && JSON.parse(songsData).length > 0) ||
+        (setlistsData && JSON.parse(setlistsData).length > 0);
+
+      if (hasLocalData) {
+        setMigrationState('migrating');
+        try {
+          await migrateLocalToFirestore(authValue.user!.uid);
+        } finally {
+          setMigrationState('done');
+        }
+      } else {
+        setMigrationState('done');
+      }
+    };
+    runMigration();
+  }, [authValue.authState, authValue.user]);
+
+  // Loading state
+  if (authValue.authState === 'loading') {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="text-[var(--muted)]">Loading...</div>
+      </div>
+    );
+  }
+
+  // Unauthenticated — show auth screen
+  if (authValue.authState === 'unauthenticated') {
+    return (
+      <AuthContext.Provider value={authValue}>
+        <AuthScreen />
+      </AuthContext.Provider>
+    );
+  }
+
+  // Unverified email — show verification screen
+  if (authValue.authState === 'unverified') {
+    return (
+      <AuthContext.Provider value={authValue}>
+        <EmailVerificationScreen />
+      </AuthContext.Provider>
+    );
+  }
+
+  // Migrating or waiting for migration check (authenticated users only)
+  if (authValue.authState === 'authenticated' && migrationState !== 'done') {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center gap-3">
+        <div className="text-[var(--foreground)] font-medium">
+          {migrationState === 'migrating' ? 'Migrating your data...' : 'Loading...'}
+        </div>
+        {migrationState === 'migrating' && (
+          <div className="text-sm text-[var(--muted)]">This will only happen once</div>
+        )}
+      </div>
+    );
+  }
+
+  // Authenticated (migration done) or guest — show the app
+  return (
+    <AuthContext.Provider value={authValue}>
+      <AppInner />
+    </AuthContext.Provider>
   );
 }

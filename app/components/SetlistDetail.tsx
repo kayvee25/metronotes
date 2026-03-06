@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useConfirm } from './ui/ConfirmModal';
 import { Setlist, Song } from '../types';
 import { useSetlists } from '../hooks/useSetlists';
 import SongPicker from './SongPicker';
@@ -160,12 +161,18 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
     setShowSongPicker(false);
   };
 
-  const handleRemoveSong = (songId: string) => {
+  const confirmAction = useConfirm();
+
+  const handleRemoveSong = async (songId: string) => {
     const song = songs.find(s => s.id === songId);
     const songName = song?.name || 'this song';
-    if (confirm(`Remove "${songName}" from setlist?`)) {
-      removeSongFromSetlist(currentSetlist.id, songId);
-    }
+    const ok = await confirmAction({
+      title: 'Remove Song',
+      message: `Remove "${songName}" from this setlist?`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+    });
+    if (ok) removeSongFromSetlist(currentSetlist.id, songId);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {

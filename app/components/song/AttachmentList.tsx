@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useConfirm } from '../ui/ConfirmModal';
 import { Attachment } from '../../types';
 import AttachmentCard from './AttachmentCard';
 import {
@@ -95,10 +96,16 @@ export default function AttachmentList({
     }
   };
 
-  const handleDelete = (attachmentId: string) => {
-    if (confirm('Delete this attachment?')) {
-      onDelete(attachmentId);
-    }
+  const confirmAction = useConfirm();
+
+  const handleDelete = async (attachmentId: string) => {
+    const ok = await confirmAction({
+      title: 'Delete Attachment',
+      message: 'Delete this attachment? This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (ok) onDelete(attachmentId);
   };
 
   if (attachments.length === 0) {

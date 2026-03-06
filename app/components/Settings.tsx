@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '../hooks/useAuth';
+import { useConfirm } from './ui/ConfirmModal';
 import { FontSize, FontFamily } from '../hooks/usePerformanceSettings';
 import { MetronomeSound } from '../hooks/useMetronomeAudio';
 
@@ -95,8 +96,19 @@ export default function Settings({
   onKeepScreenOnChange,
 }: SettingsProps) {
   const { user, authState, signOut, exitGuestMode } = useAuth();
+  const confirmAction = useConfirm();
   const isGuest = authState === 'guest';
   const wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+
+  const handleSignOut = async () => {
+    const ok = await confirmAction({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      confirmLabel: 'Sign Out',
+      variant: 'danger',
+    });
+    if (ok) signOut();
+  };
 
   return (
     <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
@@ -133,7 +145,7 @@ export default function Settings({
               </div>
             </div>
             <button
-              onClick={signOut}
+              onClick={handleSignOut}
               className="w-full h-11 rounded-xl bg-[var(--accent-danger)]/10 text-[var(--accent-danger)] font-semibold hover:bg-[var(--accent-danger)]/20 active:scale-95 transition-all text-sm"
             >
               Sign Out

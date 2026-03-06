@@ -62,6 +62,7 @@ Set up the attachment data layer without changing any UI. After this phase, exis
 - [ ] Migration works for Firestore songs
 - [ ] Migration works for localStorage songs
 - [ ] Deleting a song also deletes all its attachments from Firestore
+- [ ] Deleting the default attachment promotes the first remaining attachment to default
 - [ ] Existing app functionality is unchanged — no UI regressions
 
 ## Phase 2: Edit Mode — Attachment List UI

@@ -11,6 +11,7 @@ import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
 import TimeSignatureModal from './song/TimeSignatureModal';
 import SaveSongModal from './song/SaveSongModal';
+import RichTextEditor from './song/RichTextEditor';
 
 type Mode = 'performance' | 'edit';
 
@@ -111,6 +112,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     attachments,
     isLoading: attachmentsLoading,
     addRichText,
+    updateAttachment,
     deleteAttachment,
     reorderAttachments,
     setDefault,
@@ -190,16 +192,39 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     setShowSaveModal(false);
   };
 
+  // Rich text editor state
+  const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
+  const [isNewAttachment, setIsNewAttachment] = useState(false);
+
   // Attachment handlers
   const handleEditAttachment = useCallback((attachment: Attachment) => {
-    // Phase 3 will add Tiptap editor here
-    // For now, this is a placeholder
-    console.log('Edit attachment:', attachment.id);
+    if (attachment.type === 'richtext') {
+      setIsNewAttachment(false);
+      setEditingAttachment(attachment);
+    }
   }, []);
 
   const handleAddText = useCallback(() => {
-    addRichText();
-  }, [addRichText]);
+    setIsNewAttachment(true);
+    setEditingAttachment({ id: '', type: 'richtext', order: 0, isDefault: false, createdAt: '', updatedAt: '' });
+  }, []);
+
+  const handleEditorSave = useCallback((content: object) => {
+    if (isNewAttachment) {
+      // Create the attachment with content (no orphan on cancel)
+      addRichText(content);
+    } else if (editingAttachment) {
+      updateAttachment(editingAttachment.id, { content });
+    }
+    setEditingAttachment(null);
+    setIsNewAttachment(false);
+  }, [isNewAttachment, editingAttachment, addRichText, updateAttachment]);
+
+  const handleEditorCancel = useCallback(() => {
+    // No cleanup needed — new attachments aren't created until Done
+    setEditingAttachment(null);
+    setIsNewAttachment(false);
+  }, []);
 
   const handleAddImage = useCallback(() => {
     // Phase 4 will add image upload here
@@ -300,6 +325,13 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onNameChange={setName}
         onArtistChange={setArtist}
         onSave={handleSaveWithName}
+      />
+
+      <RichTextEditor
+        isOpen={!!editingAttachment}
+        content={editingAttachment?.content}
+        onSave={handleEditorSave}
+        onCancel={handleEditorCancel}
       />
     </>
   );

@@ -145,22 +145,45 @@ export function useAttachments(songId: string | null) {
   const deleteAttachment = useCallback((attachmentId: string) => {
     if (!songId) return;
 
+    const deleted = attachments.find(a => a.id === attachmentId);
+    const remaining = attachments.filter(a => a.id !== attachmentId);
+    const needsNewDefault = deleted?.isDefault && remaining.length > 0 && !remaining.some(a => a.isDefault);
+
     if (isGuest) {
       storage.deleteAttachment(songId, attachmentId);
+      if (needsNewDefault) {
+        storage.updateAttachment(songId, remaining[0].id, { isDefault: true });
+      }
       setAttachments(storage.getAttachments(songId));
       return;
     }
 
-    // Optimistic delete
-    setAttachments(prev => prev.filter(a => a.id !== attachmentId));
+    // Optimistic delete + promote default
+    setAttachments(prev => {
+      const after = prev.filter(a => a.id !== attachmentId);
+      if (needsNewDefault && after.length > 0) {
+        return after.map((a, i) => i === 0 ? { ...a, isDefault: true, updatedAt: new Date().toISOString() } : a);
+      }
+      return after;
+    });
 
     if (userId) {
-      firestoreDeleteAttachment(userId, songId, attachmentId).catch(() => {
-        setError("Can't save — check your internet connection.");
-        firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
-      });
+      const deletePromise = firestoreDeleteAttachment(userId, songId, attachmentId);
+      if (needsNewDefault) {
+        deletePromise.then(() =>
+          firestoreUpdateAttachment(userId, songId, remaining[0].id, { isDefault: true })
+        ).catch(() => {
+          setError("Can't save — check your internet connection.");
+          firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
+        });
+      } else {
+        deletePromise.catch(() => {
+          setError("Can't save — check your internet connection.");
+          firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
+        });
+      }
     }
-  }, [songId, isGuest, userId]);
+  }, [songId, attachments, isGuest, userId]);
 
   const deleteAllAttachments = useCallback(() => {
     if (!songId) return;

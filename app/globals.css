@@ -45,3 +45,76 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* Tiptap editor styles */
+.tiptap {
+  outline: none;
+  min-height: 100%;
+}
+
+.tiptap p {
+  margin: 0.25em 0;
+}
+
+.tiptap h1 {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin: 0.5em 0 0.25em;
+}
+
+.tiptap h2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+
+.tiptap ul {
+  list-style-type: disc;
+}
+
+.tiptap ol {
+  list-style-type: decimal;
+}
+
+.tiptap li {
+  margin: 0.125em 0;
+}
+
+.tiptap pre {
+  font-family: var(--font-mono), monospace;
+  background: var(--card);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+
+.tiptap code {
+  font-family: var(--font-mono), monospace;
+  background: var(--card);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.9em;
+}
+
+.tiptap pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Hide scrollbar for toolbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

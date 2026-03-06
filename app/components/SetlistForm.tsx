@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Setlist, SetlistInput } from '../types';
 
 interface SetlistFormProps {
@@ -13,12 +13,6 @@ export default function SetlistForm({ setlist, onSubmit, onCancel }: SetlistForm
   const [name, setName] = useState(setlist?.name || '');
 
   const isEditing = !!setlist;
-
-  useEffect(() => {
-    if (setlist) {
-      setName(setlist.name);
-    }
-  }, [setlist]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

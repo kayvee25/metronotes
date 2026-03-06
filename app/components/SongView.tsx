@@ -127,11 +127,11 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     if (song.notes && song.notes.trim() && attachments.length === 0) {
       migrationRef.current = true;
       const mode = authState === 'guest' ? 'guest' : 'authenticated';
-      migrateNotesToAttachment(song, mode, undefined);
+      migrateNotesToAttachment(song, mode, user?.uid);
     } else {
       migrationRef.current = true;
     }
-  }, [song, attachmentsLoading, attachments.length, authState]);
+  }, [song, attachmentsLoading, attachments.length, authState, user?.uid]);
 
   // Compute dirty state
   const { name, artist, musicalKey, mode } = formState;

@@ -1,10 +1,11 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
+import { useConfirm } from '../ui/ConfirmModal';
 import EditorToolbar from './EditorToolbar';
 
 interface RichTextEditorProps {
@@ -20,7 +21,9 @@ export default function RichTextEditor({
   onSave,
   onCancel,
 }: RichTextEditorProps) {
+  const confirm = useConfirm();
   const savedContentRef = useRef<object | undefined>(content);
+  const [editorDirty, setEditorDirty] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -49,10 +52,23 @@ export default function RichTextEditor({
       const newContent = content || { type: 'doc', content: [{ type: 'paragraph' }] };
       savedContentRef.current = content;
       editor.commands.setContent(newContent);
+      setEditorDirty(false);
       // Focus editor after opening
       setTimeout(() => editor.commands.focus('end'), 100);
     }
   }, [isOpen, editor, content]);
+
+  // Track dirty state via editor updates
+  useEffect(() => {
+    if (!editor) return;
+    const handler = () => {
+      const current = JSON.stringify(editor.getJSON());
+      const saved = JSON.stringify(savedContentRef.current || { type: 'doc', content: [{ type: 'paragraph' }] });
+      setEditorDirty(current !== saved);
+    };
+    editor.on('update', handler);
+    return () => { editor.off('update', handler); };
+  }, [editor]);
 
   // Handle keyboard height on mobile
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -83,9 +99,18 @@ export default function RichTextEditor({
     }
   }, [editor, onSave]);
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback(async () => {
+    if (editorDirty) {
+      const ok = await confirm({
+        title: 'Discard Changes',
+        message: 'You have unsaved changes. Discard them?',
+        confirmLabel: 'Discard',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
     onCancel();
-  }, [onCancel]);
+  }, [editorDirty, confirm, onCancel]);
 
   if (!isOpen) return null;
 
@@ -101,7 +126,10 @@ export default function RichTextEditor({
         </button>
         <button
           onClick={handleDone}
-          className="px-4 py-1.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm active:scale-95 transition-all"
+          disabled={!editorDirty}
+          className={`px-4 py-1.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm transition-all ${
+            editorDirty ? 'active:scale-95' : 'opacity-50 pointer-events-none'
+          }`}
         >
           Done
         </button>

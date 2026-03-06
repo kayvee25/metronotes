@@ -237,24 +237,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     save: handleSave,
   }));
 
-  // Build notes string from attachments for performance mode (temporary until Phase 5)
-  const notesFromAttachments = attachments
-    .filter(a => a.type === 'richtext' && a.content)
-    .map(a => {
-      const doc = a.content as { content?: Array<{ content?: Array<{ text?: string }> }> };
-      if (!doc.content) return '';
-      return doc.content
-        .map(node => node.content?.map(c => c.text || '').join('') || '')
-        .join('\n');
-    })
-    .join('\n\n');
-
   return (
     <>
       {mode === 'performance' ? (
         <PerformanceMode
           song={song}
-          notes={notesFromAttachments}
+          attachments={attachments}
           musicalKey={musicalKey}
           bpm={bpm}
           timeSignature={timeSignature}

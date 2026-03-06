@@ -37,7 +37,8 @@ export default function AttachmentCard({
   dragHandleProps,
 }: AttachmentCardProps) {
   const isText = attachment.type === 'richtext';
-  const preview = isText ? getTextPreview(attachment.content) : attachment.fileName || 'Image';
+  const isUploading = !isText && !attachment.storageUrl;
+  const preview = isText ? getTextPreview(attachment.content) : isUploading ? 'Uploading...' : attachment.fileName || 'Image';
   const [localName, setLocalName] = useState(attachment.name || '');
 
   return (
@@ -62,8 +63,9 @@ export default function AttachmentCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={attachment.storageUrl} alt="" className="w-full h-full object-cover" />
         ) : (
-          <svg className="w-4 h-4 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <svg className="w-4 h-4 text-[var(--muted)] animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
+            <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
           </svg>
         )}
       </div>

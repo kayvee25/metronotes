@@ -1,11 +1,11 @@
 {
   "name": "MetroNotes",
   "short_name": "MetroNotes",
-  "description": "Metronome & Setlist App for Musicians",
+  "description": "Your stage, organized.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#1C1816",
+  "theme_color": "#D4883A",
   "orientation": "portrait",
   "icons": [
     {

@@ -32,7 +32,7 @@ export default function EmailVerificationScreen() {
   return (
     <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm text-center">
-        <svg className="w-20 h-20 text-[var(--accent-blue)] mx-auto mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <svg className="w-20 h-20 text-[var(--accent)] mx-auto mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
         </svg>
 
@@ -42,20 +42,20 @@ export default function EmailVerificationScreen() {
         </p>
 
         {authError && (
-          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+          <div className="mb-4 p-3 rounded-xl bg-[var(--accent-danger)]/10 border border-[var(--accent-danger)]/20 text-[var(--accent-danger)] text-sm">
             {authError}
           </div>
         )}
 
         {resent && (
-          <div className="mb-4 p-3 rounded-xl bg-[var(--accent-green)]/10 border border-[var(--accent-green)]/20 text-[var(--accent-green)] text-sm">
+          <div className="mb-4 p-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 text-[var(--accent)] text-sm">
             Verification email sent!
           </div>
         )}
 
         <button
           onClick={handleResend}
-          className="w-full h-12 rounded-xl bg-[var(--accent-blue)] text-white font-semibold hover:brightness-110 active:scale-[0.98] transition-all mb-3"
+          className="w-full h-12 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-[0.98] transition-all mb-3"
         >
           Resend Verification Email
         </button>

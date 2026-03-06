@@ -53,7 +53,7 @@ export default function MetronomeButton({
     <button
       onClick={onClick}
       className={`${button} ${shapeClass} flex items-center justify-center gap-2 transition-all active:scale-95 ${
-        isPlaying ? 'bg-red-500' : 'bg-[var(--accent-green)]'
+        isPlaying ? 'bg-[var(--accent-danger)]' : 'bg-[var(--accent)]'
       } ${className}`}
       aria-label={isPlaying ? 'Stop' : 'Start'}
     >

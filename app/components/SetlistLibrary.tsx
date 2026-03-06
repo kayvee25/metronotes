@@ -6,6 +6,15 @@ import { useSetlists } from '../hooks/useSetlists';
 import { useSongs } from '../hooks/useSongs';
 import SetlistForm from './SetlistForm';
 import SetlistDetail from './SetlistDetail';
+import {
+  SwipeableList,
+  SwipeableListItem,
+  SwipeAction,
+  LeadingActions,
+  TrailingActions,
+  Type,
+} from 'react-swipeable-list';
+import 'react-swipeable-list/dist/styles.css';
 
 type SetlistSortOption = 'name-az' | 'name-za' | 'recent-created' | 'recent-updated';
 
@@ -34,14 +43,22 @@ function sortSetlists(setlists: Setlist[], sort: SetlistSortOption): Setlist[] {
 
 interface SetlistLibraryProps {
   onPlaySetlist?: (setlist: Setlist, startIndex?: number) => void;
+  initialViewSetlistId?: string | null;
+  onInitialViewConsumed?: () => void;
 }
 
-export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
+export default function SetlistLibrary({ onPlaySetlist, initialViewSetlistId, onInitialViewConsumed }: SetlistLibraryProps) {
   const { setlists, isLoading, error, createSetlist, updateSetlist, deleteSetlist, refresh } = useSetlists();
   const { songs } = useSongs();
   const [showForm, setShowForm] = useState(false);
   const [editingSetlist, setEditingSetlist] = useState<Setlist | null>(null);
-  const [viewingSetlist, setViewingSetlist] = useState<Setlist | null>(null);
+  const [viewingSetlist, setViewingSetlist] = useState<Setlist | null>(() => {
+    if (initialViewSetlistId) {
+      const found = setlists.find(s => s.id === initialViewSetlistId);
+      if (found) return found;
+    }
+    return null;
+  });
   const [sortOption, setSortOption] = useState<SetlistSortOption>(() => {
     if (typeof window === 'undefined') return 'name-az';
     try {
@@ -54,6 +71,18 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
   });
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  // Restore setlist detail view when returning from song view (if setlists weren't ready at init)
+  useEffect(() => {
+    if (initialViewSetlistId && !viewingSetlist && setlists.length > 0) {
+      const setlist = setlists.find(s => s.id === initialViewSetlistId);
+      if (setlist) {
+        setViewingSetlist(setlist);
+      }
+      onInitialViewConsumed?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialViewSetlistId, setlists]);
 
   // Close sort menu on outside click
   useEffect(() => {
@@ -122,7 +151,7 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Setlists</h1>
@@ -154,7 +183,7 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
                   onClick={() => handleSortChange(option.value)}
                   className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                     sortOption === option.value
-                      ? 'text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 font-medium'
+                      ? 'text-[var(--accent)] bg-[var(--accent)]/10 font-medium'
                       : 'text-[var(--foreground)] hover:bg-[var(--card)]'
                   }`}
                 >
@@ -169,9 +198,9 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
 
       {/* Error banner */}
       {error && (
-        <div className="mx-4 mt-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-between">
-          <p className="text-sm text-red-500">{error}</p>
-          <button onClick={refresh} className="text-sm font-medium text-red-500 hover:underline ml-3 flex-shrink-0">Retry</button>
+        <div className="mx-4 mt-3 px-4 py-2.5 bg-[var(--accent-danger)]/10 border border-[var(--accent-danger)]/20 rounded-xl flex items-center justify-between">
+          <p className="text-sm text-[var(--accent-danger)]">{error}</p>
+          <button onClick={refresh} className="text-sm font-medium text-[var(--accent-danger)] hover:underline ml-3 flex-shrink-0">Retry</button>
         </div>
       )}
 
@@ -196,72 +225,50 @@ export default function SetlistLibrary({ onPlaySetlist }: SetlistLibraryProps) {
             <p className="text-sm text-[var(--muted)]">Tap the + button to add a setlist</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <SwipeableList type={Type.IOS} fullSwipe={false}>
             {sortedSetlists.map((setlist) => (
-              <div
+              <SwipeableListItem
                 key={setlist.id}
-                className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 active:scale-[0.99] transition-all"
+                leadingActions={
+                  <LeadingActions>
+                    <SwipeAction onClick={() => setEditingSetlist(setlist)}>
+                      <div className="flex items-center justify-center px-6 bg-[var(--accent)] text-white h-full">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </div>
+                    </SwipeAction>
+                  </LeadingActions>
+                }
+                trailingActions={
+                  <TrailingActions>
+                    <SwipeAction onClick={() => handleDeleteSetlist(setlist)}>
+                      <div className="flex items-center justify-center px-6 bg-[var(--accent-danger)] text-white h-full">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </div>
+                    </SwipeAction>
+                  </TrailingActions>
+                }
               >
-                <div className="flex items-start justify-between gap-3">
-                  <button
-                    onClick={() => setViewingSetlist(setlist)}
-                    className="flex-1 text-left"
-                  >
-                    <h3 className="font-semibold text-[var(--foreground)]">{setlist.name}</h3>
-                    <p className="text-sm text-[var(--muted)] mt-1">{getTotalDuration(setlist)}</p>
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingSetlist(setlist)}
-                      className="w-9 h-9 rounded-lg hover:bg-[var(--border)] flex items-center justify-center transition-colors"
-                      aria-label="Edit setlist"
-                    >
-                      <svg
-                        className="w-5 h-5 text-[var(--muted)]"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteSetlist(setlist)}
-                      className="w-9 h-9 rounded-lg hover:bg-red-500/10 flex items-center justify-center transition-colors"
-                      aria-label="Delete setlist"
-                    >
-                      <svg
-                        className="w-5 h-5 text-red-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                <button
+                  onClick={() => setViewingSetlist(setlist)}
+                  className="w-full flex items-center justify-between px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)]"
+                >
+                  <h3 className="font-semibold text-[var(--foreground)]">{setlist.name}</h3>
+                  <span className="text-sm text-[var(--muted)] flex-shrink-0">{getTotalDuration(setlist)}</span>
+                </button>
+              </SwipeableListItem>
             ))}
-          </div>
+          </SwipeableList>
         )}
       </div>
 
       {/* FAB */}
       <button
         onClick={() => setShowForm(true)}
-        className="fixed bottom-[80px] right-4 w-14 h-14 rounded-full bg-[var(--accent-blue)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
+        className="fixed bottom-[80px] right-4 w-14 h-14 rounded-2xl bg-[var(--accent)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
         aria-label="Add setlist"
       >
         <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

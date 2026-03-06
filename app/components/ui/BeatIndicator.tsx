@@ -21,10 +21,14 @@ export default function BeatIndicator({
         <div
           key={index}
           className={`w-3 h-3 rounded-full transition-all duration-${ANIMATION.BEAT_INDICATOR_MS} ${
-            index === currentBeat && isBeating
-              ? index === 0
-                ? 'bg-red-500 scale-150'
-                : 'bg-[var(--accent-green)] scale-150'
+            index === currentBeat
+              ? isBeating
+                ? index === 0
+                  ? 'bg-[var(--accent-danger)] scale-150'
+                  : 'bg-[var(--accent)] scale-150'
+                : index === 0
+                  ? 'bg-[var(--accent-danger)] scale-125'
+                  : 'bg-[var(--accent)] scale-125'
               : 'bg-[var(--card)]'
           }`}
         />

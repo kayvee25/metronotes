@@ -107,17 +107,17 @@ function SortableSongItem({ song, index, onPlay, onRemove }: SortableSongItemPro
       {/* Remove button */}
       <button
         onClick={onRemove}
-        className="w-8 h-8 rounded-lg hover:bg-red-500/10 flex items-center justify-center transition-colors flex-shrink-0"
+        className="w-8 h-8 rounded-lg hover:bg-[var(--accent-danger)]/10 flex items-center justify-center transition-colors flex-shrink-0"
         aria-label="Remove from setlist"
       >
         <svg
-          className="w-5 h-5 text-red-500"
+          className="w-4 h-4 text-[var(--muted)]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
           strokeWidth={2}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
     </div>
@@ -161,7 +161,11 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
   };
 
   const handleRemoveSong = (songId: string) => {
-    removeSongFromSetlist(currentSetlist.id, songId);
+    const song = songs.find(s => s.id === songId);
+    const songName = song?.name || 'this song';
+    if (confirm(`Remove "${songName}" from setlist?`)) {
+      removeSongFromSetlist(currentSetlist.id, songId);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -182,7 +186,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
       {/* Header */}
       <header className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)]">
         <button
@@ -207,7 +211,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
         {setlistSongs.length > 0 && onPlay && (
           <button
             onClick={() => handlePlayFromSong(0)}
-            className="px-4 py-2 rounded-xl bg-[var(--accent-green)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
+            className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
           >
             <svg
               className="w-5 h-5 text-white"
@@ -241,7 +245,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
             <p className="text-[var(--muted)] mb-4">No songs in this setlist</p>
             <button
               onClick={() => setShowSongPicker(true)}
-              className="px-4 py-2 bg-[var(--accent-blue)] text-white rounded-xl font-medium hover:brightness-110 active:scale-95 transition-all"
+              className="px-4 py-2 bg-[var(--accent)] text-white rounded-xl font-medium hover:brightness-110 active:scale-95 transition-all"
             >
               Add songs
             </button>

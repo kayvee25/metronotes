@@ -1,4 +1,4 @@
-import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate } from '../types';
+import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
 
 export interface StorageAdapter {
   // Songs
@@ -14,6 +14,14 @@ export interface StorageAdapter {
   createSetlist(input: SetlistInput): Setlist;
   updateSetlist(id: string, update: SetlistUpdate): Setlist | null;
   deleteSetlist(id: string): boolean;
+
+  // Attachments
+  getAttachments(songId: string): Attachment[];
+  createAttachment(songId: string, input: AttachmentInput): Attachment;
+  updateAttachment(songId: string, attachmentId: string, update: AttachmentUpdate): Attachment | null;
+  deleteAttachment(songId: string, attachmentId: string): boolean;
+  deleteAllAttachments(songId: string): void;
+  reorderAttachments(songId: string, orderedIds: string[]): void;
 }
 
 const SONGS_KEY = 'metronotes_songs';
@@ -147,6 +155,77 @@ class LocalStorageAdapter implements StorageAdapter {
   private saveSetlists(setlists: Setlist[]): void {
     if (!this.isClient) return;
     localStorage.setItem(SETLISTS_KEY, JSON.stringify(setlists));
+  }
+
+  // Attachments
+  private attachmentsKey(songId: string): string {
+    return `metronotes_attachments_${songId}`;
+  }
+
+  getAttachments(songId: string): Attachment[] {
+    if (!this.isClient) return [];
+    const data = localStorage.getItem(this.attachmentsKey(songId));
+    const attachments: Attachment[] = data ? JSON.parse(data) : [];
+    return attachments.sort((a, b) => a.order - b.order);
+  }
+
+  createAttachment(songId: string, input: AttachmentInput): Attachment {
+    const attachments = this.getAttachments(songId);
+    const now = getTimestamp();
+    const attachment: Attachment = {
+      ...input,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    attachments.push(attachment);
+    this.saveAttachments(songId, attachments);
+    return attachment;
+  }
+
+  updateAttachment(songId: string, attachmentId: string, update: AttachmentUpdate): Attachment | null {
+    const attachments = this.getAttachments(songId);
+    const index = attachments.findIndex((a) => a.id === attachmentId);
+    if (index === -1) return null;
+    const updated: Attachment = {
+      ...attachments[index],
+      ...update,
+      updatedAt: getTimestamp(),
+    };
+    attachments[index] = updated;
+    this.saveAttachments(songId, attachments);
+    return updated;
+  }
+
+  deleteAttachment(songId: string, attachmentId: string): boolean {
+    const attachments = this.getAttachments(songId);
+    const filtered = attachments.filter((a) => a.id !== attachmentId);
+    if (filtered.length === attachments.length) return false;
+    this.saveAttachments(songId, filtered);
+    return true;
+  }
+
+  deleteAllAttachments(songId: string): void {
+    if (!this.isClient) return;
+    localStorage.removeItem(this.attachmentsKey(songId));
+  }
+
+  reorderAttachments(songId: string, orderedIds: string[]): void {
+    const attachments = this.getAttachments(songId);
+    const now = getTimestamp();
+    const reordered = orderedIds
+      .map((id, index) => {
+        const att = attachments.find((a) => a.id === id);
+        if (!att) return null;
+        return { ...att, order: index, updatedAt: now };
+      })
+      .filter((a): a is Attachment => a !== null);
+    this.saveAttachments(songId, reordered);
+  }
+
+  private saveAttachments(songId: string, attachments: Attachment[]): void {
+    if (!this.isClient) return;
+    localStorage.setItem(this.attachmentsKey(songId), JSON.stringify(attachments));
   }
 }
 

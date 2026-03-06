@@ -8,9 +8,12 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  query,
+  orderBy,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate } from '../types';
+import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -114,6 +117,52 @@ export async function firestoreDeleteSetlist(userId: string, setlistId: string):
   if (!snapshot.exists()) return false;
   await deleteDoc(ref);
   return true;
+}
+
+// Attachments
+
+function attachmentsCollection(userId: string, songId: string) {
+  return collection(db, 'users', userId, 'songs', songId, 'attachments');
+}
+
+export async function firestoreGetAttachments(userId: string, songId: string): Promise<Attachment[]> {
+  const q = query(attachmentsCollection(userId, songId), orderBy('order'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Attachment));
+}
+
+export async function firestoreCreateAttachment(userId: string, songId: string, input: AttachmentInput): Promise<Attachment> {
+  const id = generateId();
+  const now = getTimestamp();
+  const data = { ...input, createdAt: now, updatedAt: now };
+  await setDoc(doc(db, 'users', userId, 'songs', songId, 'attachments', id), data);
+  return { ...data, id };
+}
+
+export async function firestoreUpdateAttachment(userId: string, songId: string, attachmentId: string, update: AttachmentUpdate): Promise<void> {
+  const ref = doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId);
+  await updateDoc(ref, { ...update, updatedAt: getTimestamp() });
+}
+
+export async function firestoreDeleteAttachment(userId: string, songId: string, attachmentId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId));
+}
+
+export async function firestoreDeleteAllAttachments(userId: string, songId: string): Promise<void> {
+  const snapshot = await getDocs(attachmentsCollection(userId, songId));
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+}
+
+export async function firestoreReorderAttachments(userId: string, songId: string, orderedIds: string[]): Promise<void> {
+  const batch = writeBatch(db);
+  const now = getTimestamp();
+  orderedIds.forEach((id, index) => {
+    const ref = doc(db, 'users', userId, 'songs', songId, 'attachments', id);
+    batch.update(ref, { order: index, updatedAt: now });
+  });
+  await batch.commit();
 }
 
 // Migration: upload localStorage data to Firestore

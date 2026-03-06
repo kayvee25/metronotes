@@ -9,6 +9,7 @@ import {
   firestoreCreateSong,
   firestoreUpdateSong,
   firestoreDeleteSong,
+  firestoreDeleteAllAttachments,
 } from '../lib/firestore';
 
 export function useSongs() {
@@ -114,6 +115,7 @@ export function useSongs() {
 
   const deleteSong = useCallback((id: string): boolean => {
     if (isGuest) {
+      storage.deleteAllAttachments(id);
       const result = storage.deleteSong(id);
       if (result) setSongs(storage.getSongs());
       return result;
@@ -123,10 +125,13 @@ export function useSongs() {
     setSongs(prev => prev.filter(s => s.id !== id));
 
     if (userId) {
-      firestoreDeleteSong(userId, id).catch(() => {
-        setError("Can't save — check your internet connection.");
-        firestoreGetSongs(userId).then(setSongs).catch(() => {});
-      });
+      // Delete attachments first, then the song
+      firestoreDeleteAllAttachments(userId, id)
+        .then(() => firestoreDeleteSong(userId, id))
+        .catch(() => {
+          setError("Can't save — check your internet connection.");
+          firestoreGetSongs(userId).then(setSongs).catch(() => {});
+        });
     }
     return true;
   }, [isGuest, userId]);

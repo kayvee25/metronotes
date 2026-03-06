@@ -12,6 +12,7 @@ import {
   firestoreDeleteAllAttachments,
   firestoreReorderAttachments,
 } from '../lib/firestore';
+import { deleteAttachmentFile } from '../lib/storage-firebase';
 
 export function useAttachments(songId: string | null) {
   const { user, authState } = useAuth();
@@ -168,6 +169,10 @@ export function useAttachments(songId: string | null) {
     });
 
     if (userId) {
+      // Delete file from Storage if it's an image
+      if (deleted?.storagePath) {
+        deleteAttachmentFile(userId, songId, attachmentId).catch(() => {});
+      }
       const deletePromise = firestoreDeleteAttachment(userId, songId, attachmentId);
       if (needsNewDefault) {
         deletePromise.then(() =>

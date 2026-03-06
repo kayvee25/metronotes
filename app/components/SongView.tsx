@@ -6,6 +6,8 @@ import { useMetronomeAudio, MetronomeSound } from '../hooks/useMetronomeAudio';
 import { useAttachments } from '../hooks/useAttachments';
 import { useAuth } from '../hooks/useAuth';
 import { migrateNotesToAttachment } from '../lib/migration';
+import { compressImage } from '../lib/image-processing';
+import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
@@ -83,7 +85,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   perfFontFamily,
   metronomeSound = 'default',
 }, ref) {
-  const { authState } = useAuth();
+  const { authState, user } = useAuth();
   const [formState, setFormState] = useState<FormState>(() => getInitialFormState(song, initialEditMode));
   const [showTimeSigModal, setShowTimeSigModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -112,6 +114,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     attachments,
     isLoading: attachmentsLoading,
     addRichText,
+    addImage,
     updateAttachment,
     deleteAttachment,
     reorderAttachments,
@@ -226,11 +229,46 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     setIsNewAttachment(false);
   }, []);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
   const handleAddImage = useCallback(() => {
-    // Phase 4 will add image upload here
-    // For now, this is a placeholder
-    console.log('Add image - not yet implemented');
-  }, []);
+    if (authState === 'guest') {
+      setImageError('Sign in to add images');
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [authState]);
+
+  const songId = song?.id;
+  const userId = user?.uid;
+
+  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !songId || !userId) return;
+    // Reset input so same file can be selected again
+    e.target.value = '';
+
+    setImageError(null);
+    try {
+      const { blob, width, height } = await compressImage(file);
+      const attachment = await addImage({
+        type: 'image',
+        order: attachments.length,
+        isDefault: attachments.length === 0,
+        fileName: file.name,
+        fileSize: blob.size,
+        width,
+        height,
+      });
+
+      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, blob);
+      const storagePath = getStoragePath(userId, songId, attachment.id);
+      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Upload failed');
+    }
+  }, [songId, userId, attachments.length, addImage, updateAttachment]);
 
   // Expose save method to parent via ref
   useImperativeHandle(ref, () => ({
@@ -321,6 +359,25 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onSave={handleEditorSave}
         onCancel={handleEditorCancel}
       />
+
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* Image error toast */}
+      {imageError && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[var(--accent-danger)] text-white text-sm font-medium shadow-lg">
+          {imageError}
+          <button onClick={() => setImageError(null)} className="ml-2 opacity-75 hover:opacity-100">
+            &times;
+          </button>
+        </div>
+      )}
     </>
   );
 });

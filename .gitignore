@@ -40,6 +40,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# claude code
+.claude/
+CLAUDE.md
+
+# specs
+spec*.md
+
 # PWA files (generated at build time)
 /public/sw.js
 /public/workbox-*.js

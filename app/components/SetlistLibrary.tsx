@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useConfirm } from './ui/ConfirmModal';
 import { Setlist, SetlistInput } from '../types';
 import { useSetlists } from '../hooks/useSetlists';
 import { useSongs } from '../hooks/useSongs';
@@ -117,10 +118,16 @@ export default function SetlistLibrary({ onPlaySetlist, initialViewSetlistId, on
     }
   };
 
-  const handleDeleteSetlist = (setlist: Setlist) => {
-    if (confirm(`Delete "${setlist.name}"?`)) {
-      deleteSetlist(setlist.id);
-    }
+  const confirmAction = useConfirm();
+
+  const handleDeleteSetlist = async (setlist: Setlist) => {
+    const ok = await confirmAction({
+      title: 'Delete Setlist',
+      message: `Delete "${setlist.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (ok) deleteSetlist(setlist.id);
   };
 
   const getTotalDuration = (setlist: Setlist) => {

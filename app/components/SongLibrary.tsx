@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useConfirm } from './ui/ConfirmModal';
 import { Song, SongInput } from '../types';
 import { useSongs } from '../hooks/useSongs';
 import { BPM, TIME_SIGNATURE, TIME_SIGNATURES } from '../lib/constants';
@@ -103,10 +104,16 @@ export default function SongLibrary({ onSelectSong, onEditSong, onCreateSong, on
 
   const sortedSongs = sortSongs(filteredSongs, sortOption);
 
-  const handleDeleteSong = (song: Song) => {
-    if (confirm(`Delete "${song.name}"?`)) {
-      deleteSong(song.id);
-    }
+  const confirm = useConfirm();
+
+  const handleDeleteSong = async (song: Song) => {
+    const ok = await confirm({
+      title: 'Delete Song',
+      message: `Delete "${song.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (ok) deleteSong(song.id);
   };
 
   const handleSongClick = (song: Song) => {

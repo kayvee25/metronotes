@@ -14,6 +14,7 @@ import { useAuthProvider, AuthContext } from '../hooks/useAuth';
 import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { migrateLocalToFirestore } from '../lib/firestore';
+import { ConfirmProvider } from './ui/ConfirmModal';
 
 type NavigationSource = 'none' | 'songs' | 'setlists';
 type PendingNav = { type: 'tab'; tab: Tab } | { type: 'back' } | null;
@@ -424,7 +425,9 @@ export default function App() {
   // Authenticated (migration done) or guest — show the app
   return (
     <AuthContext.Provider value={authValue}>
-      <AppInner />
+      <ConfirmProvider>
+        <AppInner />
+      </ConfirmProvider>
     </AuthContext.Provider>
   );
 }

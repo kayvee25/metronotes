@@ -1,13 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Song, SongInput, Setlist } from '../types';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { Song, SongInput, Setlist, Attachment } from '../types';
 import { useMetronomeAudio, MetronomeSound } from '../hooks/useMetronomeAudio';
+import { useAttachments } from '../hooks/useAttachments';
+import { useAuth } from '../hooks/useAuth';
+import { migrateNotesToAttachment } from '../lib/migration';
+import { compressImage } from '../lib/image-processing';
+import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
 import TimeSignatureModal from './song/TimeSignatureModal';
 import SaveSongModal from './song/SaveSongModal';
+import RichTextEditor from './song/RichTextEditor';
 
 type Mode = 'performance' | 'edit';
 
@@ -35,17 +41,13 @@ interface FormState {
   name: string;
   artist: string;
   musicalKey: string;
-  notes: string;
   mode: Mode;
 }
 
 interface OriginalValues {
   name: string;
   artist: string;
-  bpm: number;
-  timeSignature: string;
   musicalKey: string;
-  notes: string;
 }
 
 function getInitialFormState(song?: Song | null, initialEditMode?: boolean): FormState {
@@ -54,21 +56,17 @@ function getInitialFormState(song?: Song | null, initialEditMode?: boolean): For
       name: song.name,
       artist: song.artist || '',
       musicalKey: song.key || '',
-      notes: song.notes || '',
       mode: initialEditMode ? 'edit' : 'performance'
     };
   }
-  return { name: '', artist: '', musicalKey: '', notes: '', mode: 'edit' };
+  return { name: '', artist: '', musicalKey: '', mode: 'edit' };
 }
 
 function getOriginalValues(song?: Song | null): OriginalValues {
   return {
     name: song?.name || '',
     artist: song?.artist || '',
-    bpm: song?.bpm || BPM.DEFAULT,
-    timeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT,
     musicalKey: song?.key || '',
-    notes: song?.notes || '',
   };
 }
 
@@ -87,10 +85,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   perfFontFamily,
   metronomeSound = 'default',
 }, ref) {
+  const { authState, user } = useAuth();
   const [formState, setFormState] = useState<FormState>(() => getInitialFormState(song, initialEditMode));
   const [showTimeSigModal, setShowTimeSigModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [savedValues, setSavedValues] = useState<OriginalValues>(() => getOriginalValues(song));
+  const migrationRef = useRef(false);
 
   const {
     bpm,
@@ -110,16 +110,35 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     sound: metronomeSound,
   });
 
-  // Note: When the song changes, App.tsx uses a key prop to remount this component
-  // so initialState functions handle the reset correctly.
+  const {
+    attachments,
+    isLoading: attachmentsLoading,
+    addRichText,
+    addImage,
+    updateAttachment,
+    deleteAttachment,
+    reorderAttachments,
+    setDefault,
+  } = useAttachments(song?.id || null);
+
+  // Migrate plain-text notes to attachment on first load
+  useEffect(() => {
+    if (migrationRef.current || !song || attachmentsLoading) return;
+    if (song.notes && song.notes.trim() && attachments.length === 0) {
+      migrationRef.current = true;
+      const mode = authState === 'guest' ? 'guest' : 'authenticated';
+      migrateNotesToAttachment(song, mode, undefined);
+    } else {
+      migrationRef.current = true;
+    }
+  }, [song, attachmentsLoading, attachments.length, authState]);
 
   // Compute dirty state
-  const { name, artist, musicalKey, notes, mode } = formState;
+  const { name, artist, musicalKey, mode } = formState;
   const isDirty =
     name !== savedValues.name ||
     artist !== savedValues.artist ||
-    musicalKey !== savedValues.musicalKey ||
-    notes !== savedValues.notes;
+    musicalKey !== savedValues.musicalKey;
 
   // Notify parent of dirty state changes
   const prevDirtyRef = useRef(false);
@@ -133,7 +152,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const setName = (name: string) => setFormState(s => ({ ...s, name }));
   const setArtist = (artist: string) => setFormState(s => ({ ...s, artist }));
   const setMusicalKey = (musicalKey: string) => setFormState(s => ({ ...s, musicalKey }));
-  const setNotes = (notes: string) => setFormState(s => ({ ...s, notes }));
   const setMode = (mode: Mode) => setFormState(s => ({ ...s, mode }));
 
   const handleSave = () => {
@@ -144,15 +162,11 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         bpm,
         timeSignature,
         key: musicalKey || undefined,
-        notes: notes.trim() || undefined
       });
       setSavedValues({
         name: name.trim() || song.name,
         artist: artist.trim(),
-        bpm,
-        timeSignature,
         musicalKey,
-        notes: notes.trim(),
       });
     } else {
       if (!name.trim()) {
@@ -164,7 +178,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           bpm,
           timeSignature,
           key: musicalKey || undefined,
-          notes: notes.trim() || undefined
         });
       }
     }
@@ -178,10 +191,84 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       bpm,
       timeSignature,
       key: musicalKey || undefined,
-      notes: notes.trim() || undefined
     });
     setShowSaveModal(false);
   };
+
+  // Rich text editor state
+  const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
+  const [isNewAttachment, setIsNewAttachment] = useState(false);
+
+  // Attachment handlers
+  const handleEditAttachment = useCallback((attachment: Attachment) => {
+    if (attachment.type === 'richtext') {
+      setIsNewAttachment(false);
+      setEditingAttachment(attachment);
+    }
+  }, []);
+
+  const handleAddText = useCallback(() => {
+    setIsNewAttachment(true);
+    setEditingAttachment({ id: '', type: 'richtext', order: 0, isDefault: false, createdAt: '', updatedAt: '' });
+  }, []);
+
+  const handleEditorSave = useCallback((content: object) => {
+    if (isNewAttachment) {
+      // Create the attachment with content (no orphan on cancel)
+      addRichText(content);
+    } else if (editingAttachment) {
+      updateAttachment(editingAttachment.id, { content });
+    }
+    setEditingAttachment(null);
+    setIsNewAttachment(false);
+  }, [isNewAttachment, editingAttachment, addRichText, updateAttachment]);
+
+  const handleEditorCancel = useCallback(() => {
+    // No cleanup needed — new attachments aren't created until Done
+    setEditingAttachment(null);
+    setIsNewAttachment(false);
+  }, []);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const handleAddImage = useCallback(() => {
+    if (authState === 'guest') {
+      setImageError('Sign in to add images');
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [authState]);
+
+  const songId = song?.id;
+  const userId = user?.uid;
+
+  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !songId || !userId) return;
+    // Reset input so same file can be selected again
+    e.target.value = '';
+
+    setImageError(null);
+    try {
+      const { blob, width, height } = await compressImage(file);
+      const attachment = await addImage({
+        type: 'image',
+        order: attachments.length,
+        isDefault: attachments.length === 0,
+        fileName: file.name,
+        fileSize: blob.size,
+        width,
+        height,
+      });
+
+      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, blob);
+      const storagePath = getStoragePath(userId, songId, attachment.id);
+      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Upload failed');
+    }
+  }, [songId, userId, attachments.length, addImage, updateAttachment]);
 
   // Expose save method to parent via ref
   useImperativeHandle(ref, () => ({
@@ -193,14 +280,13 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       {mode === 'performance' ? (
         <PerformanceMode
           song={song}
-          notes={notes}
+          attachments={attachments}
           musicalKey={musicalKey}
           bpm={bpm}
           timeSignature={timeSignature}
           isPlaying={isPlaying}
           currentBeat={currentBeat}
           isBeating={isBeating}
-          beatsPerMeasure={beatsPerMeasure}
           setlist={setlist}
           songIndex={songIndex}
           showBack={showBack}
@@ -220,7 +306,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           song={song}
           name={name}
           artist={artist}
-          notes={notes}
           musicalKey={musicalKey}
           bpm={bpm}
           timeSignature={timeSignature}
@@ -228,18 +313,27 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           currentBeat={currentBeat}
           isBeating={isBeating}
           beatsPerMeasure={beatsPerMeasure}
+          isMuted={isMuted}
           showBack={showBack}
           onBack={onBack}
           onNameChange={setName}
           onArtistChange={setArtist}
-          onNotesChange={setNotes}
           onKeyChange={setMusicalKey}
           onBpmChange={handleBpmChange}
           onTogglePlay={togglePlayStop}
+          onToggleMute={() => setIsMuted(!isMuted)}
           onSwitchToPerformance={() => setMode('performance')}
           onOpenTimeSigModal={() => setShowTimeSigModal(true)}
           onSave={handleSave}
           isDirty={isDirty}
+          attachments={attachments}
+          onEditAttachment={handleEditAttachment}
+          onDeleteAttachment={deleteAttachment}
+          onToggleDefaultAttachment={setDefault}
+          onRenameAttachment={(id, name) => updateAttachment(id, { name })}
+          onReorderAttachments={reorderAttachments}
+          onAddTextAttachment={handleAddText}
+          onAddImageAttachment={handleAddImage}
         />
       )}
 
@@ -259,6 +353,32 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onArtistChange={setArtist}
         onSave={handleSaveWithName}
       />
+
+      <RichTextEditor
+        isOpen={!!editingAttachment}
+        content={editingAttachment?.content}
+        onSave={handleEditorSave}
+        onCancel={handleEditorCancel}
+      />
+
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* Image error toast */}
+      {imageError && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[var(--accent-danger)] text-white text-sm font-medium shadow-lg">
+          {imageError}
+          <button onClick={() => setImageError(null)} className="ml-2 opacity-75 hover:opacity-100">
+            &times;
+          </button>
+        </div>
+      )}
     </>
   );
 });

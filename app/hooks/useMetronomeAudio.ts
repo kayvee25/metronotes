@@ -73,7 +73,6 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
         audioContextRef.current.close();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update muted ref when muted state changes

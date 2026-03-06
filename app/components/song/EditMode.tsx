@@ -1,17 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Song } from '../../types';
+import { Song, Attachment } from '../../types';
 import { BPM } from '../../lib/constants';
 import KeySelector from '../KeySelector';
-import BeatIndicator from '../ui/BeatIndicator';
-import MetronomeButton from '../ui/MetronomeButton';
+import MetronomePill from '../ui/MetronomePill';
+import AttachmentList from './AttachmentList';
 
 interface EditModeProps {
   song?: Song | null;
   name: string;
   artist: string;
-  notes: string;
   musicalKey: string;
   bpm: number;
   timeSignature: string;
@@ -19,44 +18,59 @@ interface EditModeProps {
   currentBeat: number;
   isBeating: boolean;
   beatsPerMeasure: number;
+  isMuted: boolean;
   showBack: boolean;
   onBack: () => void;
   onNameChange: (name: string) => void;
   onArtistChange: (artist: string) => void;
-  onNotesChange: (notes: string) => void;
   onKeyChange: (key: string) => void;
   onBpmChange: (bpm: number) => void;
   onTogglePlay: () => void;
+  onToggleMute: () => void;
   onSwitchToPerformance: () => void;
   onOpenTimeSigModal: () => void;
   onSave: () => void;
   isDirty?: boolean;
+  // Attachments
+  attachments: Attachment[];
+  onEditAttachment: (attachment: Attachment) => void;
+  onDeleteAttachment: (attachmentId: string) => void;
+  onToggleDefaultAttachment: (attachmentId: string) => void;
+  onReorderAttachments: (orderedIds: string[]) => void;
+  onAddTextAttachment: () => void;
+  onAddImageAttachment: () => void;
 }
 
 export default function EditMode({
   song,
   name,
   artist,
-  notes,
   musicalKey,
   bpm,
   timeSignature,
   isPlaying,
   currentBeat,
   isBeating,
-  beatsPerMeasure,
+  isMuted,
   showBack,
   onBack,
   onNameChange,
   onArtistChange,
-  onNotesChange,
   onKeyChange,
   onBpmChange,
   onTogglePlay,
+  onToggleMute,
   onSwitchToPerformance,
   onOpenTimeSigModal,
   onSave,
   isDirty = true,
+  attachments,
+  onEditAttachment,
+  onDeleteAttachment,
+  onToggleDefaultAttachment,
+  onReorderAttachments,
+  onAddTextAttachment,
+  onAddImageAttachment,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -234,37 +248,28 @@ export default function EditMode({
         </div>
       </div>
 
-      {/* Notes area */}
-      <div className="flex-1 overflow-y-auto p-4 pb-32">
-        <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">
-          Lyrics / Notes
-        </label>
-        <textarea
-          value={notes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          placeholder="Add lyrics, chords, notes, or anything else..."
-          className="w-full h-64 sm:h-96 px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] resize-none font-mono text-sm"
-        />
-      </div>
+      {/* Attachment list */}
+      <AttachmentList
+        attachments={attachments}
+        onEdit={onEditAttachment}
+        onDelete={onDeleteAttachment}
+        onToggleDefault={onToggleDefaultAttachment}
+        onReorder={onReorderAttachments}
+        onAddText={onAddTextAttachment}
+        onAddImage={onAddImageAttachment}
+      />
 
-      {/* Bottom control bar */}
-      <div className="fixed bottom-16 left-0 right-0 z-40 bg-[var(--background)] border-t border-[var(--border)] px-4 py-3">
-        <div className="flex items-center justify-between">
-          {/* Beat indicator */}
-          <BeatIndicator
-            beatsPerMeasure={beatsPerMeasure}
-            currentBeat={currentBeat}
-            isBeating={isBeating}
-          />
-          {/* Play button */}
-          <MetronomeButton
-            isPlaying={isPlaying}
-            onClick={onTogglePlay}
-            size="lg"
-            variant="round"
-          />
-        </div>
-      </div>
+      {/* Floating metronome pill */}
+      <MetronomePill
+        bpm={bpm}
+        isPlaying={isPlaying}
+        currentBeat={currentBeat}
+        isBeating={isBeating}
+        isMuted={isMuted}
+        onTogglePlay={onTogglePlay}
+        onBpmChange={onBpmChange}
+        onToggleMute={onToggleMute}
+      />
     </div>
   );
 }

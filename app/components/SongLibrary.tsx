@@ -5,6 +5,15 @@ import { Song, SongInput } from '../types';
 import { useSongs } from '../hooks/useSongs';
 import { BPM, TIME_SIGNATURE, TIME_SIGNATURES } from '../lib/constants';
 import Modal from './ui/Modal';
+import {
+  SwipeableList,
+  SwipeableListItem,
+  SwipeAction,
+  LeadingActions,
+  TrailingActions,
+  Type,
+} from 'react-swipeable-list';
+import 'react-swipeable-list/dist/styles.css';
 
 type SongSortOption = 'name-az' | 'name-za' | 'bpm-low' | 'bpm-high' | 'recent-added' | 'recent-updated';
 
@@ -39,11 +48,12 @@ function sortSongs(songs: Song[], sort: SongSortOption): Song[] {
 
 interface SongLibraryProps {
   onSelectSong?: (song: Song) => void;
+  onEditSong?: (song: Song) => void;
   onCreateSong?: (input: SongInput) => Song;
   onQuickAddSong?: (song: Song) => void;
 }
 
-export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
+export default function SongLibrary({ onSelectSong, onEditSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
   const { songs, isLoading, error, deleteSong, refresh } = useSongs();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SongSortOption>(() => {
@@ -93,8 +103,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
 
   const sortedSongs = sortSongs(filteredSongs, sortOption);
 
-  const handleDeleteSong = (e: React.MouseEvent, song: Song) => {
-    e.stopPropagation();
+  const handleDeleteSong = (song: Song) => {
     if (confirm(`Delete "${song.name}"?`)) {
       deleteSong(song.id);
     }
@@ -132,7 +141,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
         <h1 className="text-xl font-bold text-[var(--foreground)]">Songs</h1>
@@ -164,7 +173,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
                   onClick={() => handleSortChange(option.value)}
                   className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                     sortOption === option.value
-                      ? 'text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 font-medium'
+                      ? 'text-[var(--accent)] bg-[var(--accent)]/10 font-medium'
                       : 'text-[var(--foreground)] hover:bg-[var(--card)]'
                   }`}
                 >
@@ -179,9 +188,9 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
 
       {/* Error banner */}
       {error && (
-        <div className="mx-4 mt-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-between">
-          <p className="text-sm text-red-500">{error}</p>
-          <button onClick={refresh} className="text-sm font-medium text-red-500 hover:underline ml-3 flex-shrink-0">Retry</button>
+        <div className="mx-4 mt-3 px-4 py-2.5 bg-[var(--accent-danger)]/10 border border-[var(--accent-danger)]/20 rounded-xl flex items-center justify-between">
+          <p className="text-sm text-[var(--accent-danger)]">{error}</p>
+          <button onClick={refresh} className="text-sm font-medium text-[var(--accent-danger)] hover:underline ml-3 flex-shrink-0">Retry</button>
         </div>
       )}
 
@@ -206,7 +215,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search songs..."
-            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
       </div>
@@ -238,64 +247,65 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          <SwipeableList type={Type.IOS} fullSwipe={false}>
             {sortedSongs.map((song) => (
-              <div
+              <SwipeableListItem
                 key={song.id}
-                className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 active:scale-[0.99] transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <button
-                    onClick={() => handleSongClick(song)}
-                    className="flex-1 min-w-0 text-left"
-                  >
-                    <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
-                    {song.artist && (
-                      <p className="text-sm text-[var(--muted)] truncate">{song.artist}</p>
-                    )}
-                    <div className="flex items-center gap-3 mt-2 text-sm text-[var(--muted)]">
-                      <span className="font-mono">{song.bpm} BPM</span>
-                      <span>•</span>
-                      <span>{song.timeSignature}</span>
-                      {song.key && (
-                        <>
-                          <span>•</span>
-                          <span>{song.key}</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={(e) => handleDeleteSong(e, song)}
-                    className="w-9 h-9 rounded-lg hover:bg-red-500/10 flex items-center justify-center transition-colors flex-shrink-0"
-                    aria-label="Delete song"
-                  >
-                    <svg
-                      className="w-5 h-5 text-red-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
+                leadingActions={
+                  onEditSong ? (
+                    <LeadingActions>
+                      <SwipeAction onClick={() => onEditSong(song)}>
+                        <div className="flex items-center justify-center px-6 bg-[var(--accent)] text-white h-full">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </div>
+                      </SwipeAction>
+                    </LeadingActions>
+                  ) : undefined
+                }
+                trailingActions={
+                  <TrailingActions>
+                    <SwipeAction
+                      onClick={() => handleDeleteSong(song)}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+                      <div className="flex items-center justify-center px-6 bg-[var(--accent-danger)] text-white h-full">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </div>
+                    </SwipeAction>
+                  </TrailingActions>
+                }
+              >
+                <button
+                  onClick={() => handleSongClick(song)}
+                  className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)]"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
+                    </div>
+                    {song.artist && (
+                      <p className="text-xs text-[var(--muted)] truncate mt-0.5">{song.artist}</p>
+                    )}
+                  </div>
+                  {song.key && (
+                    <span className="text-xs font-medium text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
+                      {song.key}
+                    </span>
+                  )}
+                </button>
+              </SwipeableListItem>
             ))}
-          </div>
+          </SwipeableList>
         )}
       </div>
 
       {/* FAB */}
       <button
         onClick={() => setShowQuickAdd(true)}
-        className="fixed bottom-[80px] right-4 w-14 h-14 rounded-full bg-[var(--accent-blue)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
+        className="fixed bottom-[80px] right-4 w-14 h-14 rounded-2xl bg-[var(--accent)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
         aria-label="Add song"
       >
         <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -308,14 +318,14 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
         <div className="space-y-4 mb-6">
           <div>
             <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">
-              Name <span className="text-red-500">*</span>
+              Name <span className="text-[var(--accent-danger)]">*</span>
             </label>
             <input
               type="text"
               value={qaName}
               onChange={(e) => setQaName(e.target.value)}
               placeholder="Song name"
-              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
               autoFocus
             />
           </div>
@@ -330,7 +340,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
               pattern="[0-9]*"
               value={qaBpm}
               onChange={(e) => setQaBpm(e.target.value.replace(/\D/g, ''))}
-              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
             />
           </div>
 
@@ -341,7 +351,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
             <select
               value={qaTimeSig}
               onChange={(e) => setQaTimeSig(e.target.value)}
-              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-blue)] cursor-pointer"
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
             >
               {TIME_SIGNATURES.map((ts) => (
                 <option key={ts} value={ts}>{ts}</option>
@@ -360,7 +370,7 @@ export default function SongLibrary({ onSelectSong, onCreateSong, onQuickAddSong
           <button
             onClick={handleQuickAdd}
             disabled={!qaName.trim()}
-            className="flex-1 h-12 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
+            className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
           >
             Create
           </button>

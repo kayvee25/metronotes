@@ -37,14 +37,14 @@ export default function SetlistForm({ setlist, onSubmit, onCancel }: SetlistForm
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--muted)]">
-              Setlist Name <span className="text-red-500">*</span>
+              Setlist Name <span className="text-[var(--accent-danger)]">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Friday Night Gig"
-              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+              className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
               autoFocus
             />
           </div>
@@ -60,7 +60,7 @@ export default function SetlistForm({ setlist, onSubmit, onCancel }: SetlistForm
             <button
               type="submit"
               disabled={!name.trim()}
-              className="flex-1 h-12 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isEditing ? 'Save' : 'Create'}
             </button>

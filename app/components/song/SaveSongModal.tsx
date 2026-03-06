@@ -31,14 +31,14 @@ export default function SaveSongModal({
       <div className="space-y-4 mb-6">
         <div>
           <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">
-            Song Name <span className="text-red-500">*</span>
+            Song Name <span className="text-[var(--accent-danger)]">*</span>
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder="Enter song name"
-            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
             autoFocus
           />
         </div>
@@ -52,7 +52,7 @@ export default function SaveSongModal({
             value={artist}
             onChange={(e) => onArtistChange(e.target.value)}
             placeholder="Enter artist name"
-            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
       </div>
@@ -67,7 +67,7 @@ export default function SaveSongModal({
         <button
           onClick={handleSave}
           disabled={!name.trim()}
-          className="flex-1 h-12 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
+          className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
         >
           Save
         </button>

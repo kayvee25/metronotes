@@ -46,7 +46,7 @@ export default function SongPicker({ songs, existingSongIds, onSelect, onCancel 
         <button
           onClick={handleSubmit}
           disabled={selectedIds.length === 0}
-          className="px-3 py-2 text-[var(--accent-blue)] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-2 text-[var(--accent)] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Add ({selectedIds.length})
         </button>
@@ -73,7 +73,7 @@ export default function SongPicker({ songs, existingSongIds, onSelect, onCancel 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search songs..."
-            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
       </div>
@@ -100,7 +100,7 @@ export default function SongPicker({ songs, existingSongIds, onSelect, onCancel 
                   onClick={() => toggleSong(song.id)}
                   className={`w-full text-left p-4 rounded-xl border transition-all active:scale-[0.99] ${
                     isSelected
-                      ? 'bg-[var(--accent-blue)]/10 border-[var(--accent-blue)]'
+                      ? 'bg-[var(--accent)]/10 border-[var(--accent)]'
                       : 'bg-[var(--card)] border-[var(--border)]'
                   }`}
                 >
@@ -109,7 +109,7 @@ export default function SongPicker({ songs, existingSongIds, onSelect, onCancel 
                     <div
                       className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${
                         isSelected
-                          ? 'bg-[var(--accent-blue)] border-[var(--accent-blue)]'
+                          ? 'bg-[var(--accent)] border-[var(--accent)]'
                           : 'border-[var(--border)]'
                       }`}
                     >

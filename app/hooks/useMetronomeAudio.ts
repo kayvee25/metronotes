@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BPM, TIME_SIGNATURE, AUDIO, ANIMATION } from '../lib/constants';
 
+export type MetronomeSound = 'default' | 'wood' | 'cowbell';
+
 interface UseMetronomeAudioOptions {
   initialBpm?: number;
   initialTimeSignature?: string;
-  initialVolume?: number;
+  sound?: MetronomeSound;
 }
 
 interface UseMetronomeAudioReturn {
@@ -18,22 +20,22 @@ interface UseMetronomeAudioReturn {
   setIsPlaying: (playing: boolean) => void;
   currentBeat: number;
   isBeating: boolean;
-  volume: number;
-  setVolume: (volume: number) => void;
+  isMuted: boolean;
+  setIsMuted: (muted: boolean) => void;
   beatsPerMeasure: number;
   handleBpmChange: (newBpm: number) => void;
   togglePlayStop: () => void;
 }
 
 export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMetronomeAudioReturn {
-  const { initialBpm = BPM.DEFAULT, initialTimeSignature = TIME_SIGNATURE.DEFAULT, initialVolume = AUDIO.DEFAULT_VOLUME } = options;
+  const { initialBpm = BPM.DEFAULT, initialTimeSignature = TIME_SIGNATURE.DEFAULT, sound = 'default' } = options;
 
   const [bpm, setBpm] = useState(initialBpm);
   const [timeSignature, setTimeSignature] = useState(initialTimeSignature);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
   const [isBeating, setIsBeating] = useState(false);
-  const [volume, setVolume] = useState(initialVolume);
+  const [isMuted, setIsMuted] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextNoteTimeRef = useRef<number>(0);
@@ -41,7 +43,8 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
   const currentBeatRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const schedulerRef = useRef<(() => void) | undefined>(undefined);
-  const volumeRef = useRef<number>(initialVolume);
+  const mutedRef = useRef<boolean>(false);
+  const soundRef = useRef<MetronomeSound>(sound);
 
   const beatsPerMeasure = parseInt(timeSignature.split('/')[0]) || 4;
 
@@ -54,13 +57,16 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     setTimeSignature(initialTimeSignature);
   }, [initialTimeSignature]);
 
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+
   // Initialize audio context
   useEffect(() => {
     const AudioContextClass =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     audioContextRef.current = new AudioContextClass();
-    volumeRef.current = volume;
 
     return () => {
       if (audioContextRef.current) {
@@ -70,24 +76,21 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update volume ref when volume state changes
+  // Update muted ref when muted state changes
   useEffect(() => {
-    volumeRef.current = volume;
-  }, [volume]);
+    mutedRef.current = isMuted;
+  }, [isMuted]);
 
-  // Create click sound
-  const createClickSound = useCallback((isAccent: boolean, scheduledTime: number) => {
-    if (!audioContextRef.current) return null;
-
-    const ctx = audioContextRef.current;
+  // Create default sine click
+  const createDefaultClick = useCallback((ctx: AudioContext, isAccent: boolean, scheduledTime: number) => {
+    if (mutedRef.current) return;
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
     oscillator.frequency.value = isAccent ? AUDIO.FREQUENCY.ACCENT : AUDIO.FREQUENCY.REGULAR;
     oscillator.type = 'sine';
 
-    const currentVolume = volumeRef.current;
-    const targetGain = currentVolume * (isAccent ? 1 : 0.7);
+    const targetGain = isAccent ? 1 : 0.7;
 
     gainNode.gain.setValueAtTime(0, scheduledTime);
     gainNode.gain.linearRampToValueAtTime(targetGain, scheduledTime + 0.001);
@@ -96,24 +99,106 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     oscillator.connect(gainNode);
     gainNode.connect(ctx.destination);
 
-    return { oscillator, gainNode };
+    oscillator.start(scheduledTime);
+    oscillator.stop(scheduledTime + AUDIO.CLICK_DURATION);
+  }, []);
+
+  // Create wood block sound: noise burst through bandpass filter
+  const createWoodClick = useCallback((ctx: AudioContext, isAccent: boolean, scheduledTime: number) => {
+    if (mutedRef.current) return;
+    const bufferSize = ctx.sampleRate * 0.05; // 50ms
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = isAccent ? 1200 : 900;
+    bandpass.Q.value = 3;
+
+    const gainNode = ctx.createGain();
+    const targetGain = isAccent ? 1.2 : 0.8;
+
+    gainNode.gain.setValueAtTime(targetGain, scheduledTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, scheduledTime + 0.06);
+
+    source.connect(bandpass);
+    bandpass.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    source.start(scheduledTime);
+    source.stop(scheduledTime + 0.06);
+  }, []);
+
+  // Create cowbell sound: two detuned triangle oscillators with warm filtering
+  const createCowbellClick = useCallback((ctx: AudioContext, isAccent: boolean, scheduledTime: number) => {
+    if (mutedRef.current) return;
+    const targetGain = isAccent ? 0.6 : 0.4;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc2.type = 'triangle';
+    osc1.frequency.value = isAccent ? 545 : 520;
+    osc2.frequency.value = isAccent ? 820 : 790;
+
+    // Gentle bandpass to shape the tone without harsh ringing
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 700;
+    bandpass.Q.value = 1;
+
+    // Highpass to remove low-end mud
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 300;
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(targetGain, scheduledTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, scheduledTime + 0.08);
+
+    osc1.connect(bandpass);
+    osc2.connect(bandpass);
+    bandpass.connect(highpass);
+    highpass.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    osc1.start(scheduledTime);
+    osc2.start(scheduledTime);
+    osc1.stop(scheduledTime + 0.08);
+    osc2.stop(scheduledTime + 0.08);
   }, []);
 
   // Schedule next note
   const scheduleNote = useCallback(
     (beatNumber: number, time: number) => {
-      const isAccent = beatNumber === 0;
-      const sound = createClickSound(isAccent, time);
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
 
-      if (sound) {
-        sound.oscillator.start(time);
-        sound.oscillator.stop(time + AUDIO.CLICK_DURATION);
+      const isAccent = beatNumber === 0;
+      const currentSound = soundRef.current;
+
+      switch (currentSound) {
+        case 'wood':
+          createWoodClick(ctx, isAccent, time);
+          break;
+        case 'cowbell':
+          createCowbellClick(ctx, isAccent, time);
+          break;
+        default:
+          createDefaultClick(ctx, isAccent, time);
+          break;
       }
     },
-    [createClickSound]
+    [createDefaultClick, createWoodClick, createCowbellClick]
   );
 
-  // Scheduler loop
+  // Audio scheduler — runs via requestAnimationFrame, schedules audio ahead of time
   useEffect(() => {
     const scheduler = () => {
       if (!audioContextRef.current || !isPlaying) return;
@@ -125,11 +210,6 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
 
       while (nextNoteTimeRef.current < currentTime + scheduleAheadTimeRef.current) {
         scheduleNote(currentBeatRef.current, nextNoteTimeRef.current);
-
-        setCurrentBeat(currentBeatRef.current);
-        setIsBeating(true);
-        setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
-
         nextNoteTimeRef.current += secondsPerBeat;
         currentBeatRef.current = (currentBeatRef.current + 1) % beats;
       }
@@ -142,7 +222,41 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     schedulerRef.current = scheduler;
   }, [isPlaying, bpm, timeSignature, scheduleNote]);
 
-  // Start/stop metronome
+  // Visual beat indicator — runs on a simple interval synced to BPM
+  const visualBeatRef = useRef<number>(0);
+  const visualIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isPlaying) {
+      const beats = parseInt(timeSignature.split('/')[0]) || 4;
+      const intervalMs = 60000 / bpm;
+
+      visualBeatRef.current = 0;
+      setCurrentBeat(0);
+      setIsBeating(true);
+      setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
+
+      visualIntervalRef.current = setInterval(() => {
+        visualBeatRef.current = (visualBeatRef.current + 1) % beats;
+        setCurrentBeat(visualBeatRef.current);
+        setIsBeating(true);
+        setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
+      }, intervalMs);
+    } else {
+      if (visualIntervalRef.current !== null) {
+        clearInterval(visualIntervalRef.current);
+        visualIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (visualIntervalRef.current !== null) {
+        clearInterval(visualIntervalRef.current);
+      }
+    };
+  }, [isPlaying, bpm, timeSignature]);
+
+  // Start/stop metronome audio
   useEffect(() => {
     if (isPlaying) {
       if (audioContextRef.current?.state === 'suspended') {
@@ -192,8 +306,8 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     setIsPlaying,
     currentBeat,
     isBeating,
-    volume,
-    setVolume,
+    isMuted,
+    setIsMuted,
     beatsPerMeasure,
     handleBpmChange,
     togglePlayStop

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Song, SongInput, Setlist } from '../types';
-import { useMetronomeAudio } from '../hooks/useMetronomeAudio';
+import { useMetronomeAudio, MetronomeSound } from '../hooks/useMetronomeAudio';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
@@ -26,6 +26,9 @@ interface SongViewProps {
   showBack?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   initialEditMode?: boolean;
+  perfFontSize?: string;
+  perfFontFamily?: string;
+  metronomeSound?: MetronomeSound;
 }
 
 interface FormState {
@@ -80,6 +83,9 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   showBack = true,
   onDirtyChange,
   initialEditMode = false,
+  perfFontSize,
+  perfFontFamily,
+  metronomeSound = 'default',
 }, ref) {
   const [formState, setFormState] = useState<FormState>(() => getInitialFormState(song, initialEditMode));
   const [showTimeSigModal, setShowTimeSigModal] = useState(false);
@@ -93,12 +99,15 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     isPlaying,
     currentBeat,
     isBeating,
+    isMuted,
+    setIsMuted,
     beatsPerMeasure,
     handleBpmChange,
     togglePlayStop
   } = useMetronomeAudio({
     initialBpm: song?.bpm || BPM.DEFAULT,
-    initialTimeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT
+    initialTimeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT,
+    sound: metronomeSound,
   });
 
   // Note: When the song changes, App.tsx uses a key prop to remount this component
@@ -109,8 +118,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const isDirty =
     name !== savedValues.name ||
     artist !== savedValues.artist ||
-    bpm !== savedValues.bpm ||
-    timeSignature !== savedValues.timeSignature ||
     musicalKey !== savedValues.musicalKey ||
     notes !== savedValues.notes;
 
@@ -201,7 +208,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onPrevSong={onPrevSong}
           onNextSong={onNextSong}
           onTogglePlay={togglePlayStop}
+          onBpmChange={handleBpmChange}
           onSwitchToEdit={() => setMode('edit')}
+          perfFontSize={perfFontSize}
+          perfFontFamily={perfFontFamily}
+          isMuted={isMuted}
+          onToggleMute={() => setIsMuted(!isMuted)}
         />
       ) : (
         <EditMode

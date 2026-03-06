@@ -83,7 +83,7 @@ export default function EditMode({
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--background)]">
+    <div className="flex flex-col min-h-screen bg-[var(--background)] max-w-2xl mx-auto w-full">
       {/* Header */}
       <header className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
         {showBack && (
@@ -151,7 +151,7 @@ export default function EditMode({
         <button
           onClick={onSave}
           disabled={!isDirty}
-          className={`px-4 py-2 rounded-xl bg-[var(--accent-blue)] text-white font-semibold transition-all ${
+          className={`px-4 py-2 rounded-xl bg-[var(--accent)] text-white font-semibold transition-all ${
             isDirty ? 'active:scale-95' : 'opacity-50 pointer-events-none'
           }`}
         >
@@ -243,7 +243,7 @@ export default function EditMode({
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Add lyrics, chords, notes, or anything else..."
-          className="w-full h-64 px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none font-mono text-sm"
+          className="w-full h-64 sm:h-96 px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] resize-none font-mono text-sm"
         />
       </div>
 

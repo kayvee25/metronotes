@@ -11,6 +11,8 @@ import EmailVerificationScreen from './EmailVerificationScreen';
 import { Song, Setlist, SongInput } from '../types';
 import { useSongs } from '../hooks/useSongs';
 import { useAuthProvider, AuthContext } from '../hooks/useAuth';
+import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
+import { useWakeLock } from '../hooks/useWakeLock';
 import { migrateLocalToFirestore } from '../lib/firestore';
 
 type NavigationSource = 'none' | 'songs' | 'setlists';
@@ -32,7 +34,12 @@ function AppInner() {
   const [navigationSource, setNavigationSource] = useState<NavigationSource>('none');
   const [isDarkMode, setIsDarkMode] = useState(getInitialDarkMode);
   const [editModeOnOpen, setEditModeOnOpen] = useState(false);
+  const [returnToSetlistId, setReturnToSetlistId] = useState<string | null>(null);
   const { songs, createSong, updateSong } = useSongs();
+  const perfSettings = usePerformanceSettings();
+
+  // Keep screen on during performance mode
+  useWakeLock(perfSettings.keepScreenOn, showSongView);
 
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState(false);
@@ -84,6 +91,16 @@ function AppInner() {
     history.pushState(null, '', '');
   };
 
+  const handleEditSong = (song: Song) => {
+    setSelectedSong(song);
+    setActiveSetlist(null);
+    setNavigationSource('songs');
+    setEditModeOnOpen(true);
+    setShowSongView(true);
+    setIsDirty(false);
+    history.pushState(null, '', '');
+  };
+
   const handleClearSong = () => {
     if (isDirty) {
       setPendingNavigation({ type: 'back' });
@@ -93,6 +110,9 @@ function AppInner() {
       setActiveTab('songs');
     } else if (navigationSource === 'setlists') {
       setActiveTab('setlists');
+      if (activeSetlist) {
+        setReturnToSetlistId(activeSetlist.id);
+      }
     }
     doNavigateBack();
   };
@@ -146,6 +166,9 @@ function AppInner() {
           setActiveTab('songs');
         } else if (navigationSource === 'setlists') {
           setActiveTab('setlists');
+          if (activeSetlist) {
+            setReturnToSetlistId(activeSetlist.id);
+          }
         }
         setTimeout(() => {
           doNavigateBack();
@@ -201,6 +224,9 @@ function AppInner() {
         setActiveTab('songs');
       } else if (navigationSource === 'setlists') {
         setActiveTab('setlists');
+        if (activeSetlist) {
+          setReturnToSetlistId(activeSetlist.id);
+        }
       }
       doNavigateBack();
     } else if (nav?.type === 'tab') {
@@ -237,31 +263,51 @@ function AppInner() {
             showBack={navigationSource !== 'none'}
             onDirtyChange={handleDirtyChange}
             initialEditMode={editModeOnOpen}
+            perfFontSize={perfSettings.fontSize}
+            perfFontFamily={perfSettings.fontFamily}
+            metronomeSound={perfSettings.metronomeSound}
           />
         ) : (
           <>
             {activeTab === 'songs' && (
               <SongLibrary
                 onSelectSong={handleSelectSong}
+                onEditSong={handleEditSong}
                 onCreateSong={createSong}
                 onQuickAddSong={handleCreateFromQuickAdd}
               />
             )}
-            {activeTab === 'setlists' && <SetlistLibrary onPlaySetlist={handlePlaySetlist} />}
+            {activeTab === 'setlists' && (
+              <SetlistLibrary
+                onPlaySetlist={handlePlaySetlist}
+                initialViewSetlistId={returnToSetlistId}
+                onInitialViewConsumed={() => setReturnToSetlistId(null)}
+              />
+            )}
             {activeTab === 'settings' && (
               <Settings
                 isDarkMode={isDarkMode}
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+                fontSize={perfSettings.fontSize}
+                onFontSizeChange={perfSettings.setFontSize}
+                fontFamily={perfSettings.fontFamily}
+                onFontFamilyChange={perfSettings.setFontFamily}
+                metronomeSound={perfSettings.metronomeSound}
+                onMetronomeSoundChange={perfSettings.setMetronomeSound}
+                keepScreenOn={perfSettings.keepScreenOn}
+                onKeepScreenOnChange={perfSettings.setKeepScreenOn}
               />
             )}
           </>
         )}
       </main>
 
-      <BottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-      />
+      {!showSongView && (
+        <BottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
+      )}
 
       {/* Unsaved changes dialog */}
       {pendingNavigation && (
@@ -288,7 +334,7 @@ function AppInner() {
               </button>
               <button
                 onClick={handleSaveAndNavigate}
-                className="flex-1 h-12 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
+                className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
               >
                 Save
               </button>

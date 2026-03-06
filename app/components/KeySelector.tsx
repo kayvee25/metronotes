@@ -39,7 +39,7 @@ export default function KeySelector({ value, onChange, className = '', compact =
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`px-4 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-blue)] cursor-pointer ${className}`}
+      className={`px-4 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer ${className}`}
     >
       <option value="">Key not set</option>
       {MUSICAL_KEYS.map((key) => (

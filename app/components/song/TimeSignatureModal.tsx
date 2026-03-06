@@ -75,7 +75,7 @@ export default function TimeSignatureModal({
                 e.currentTarget.blur();
               }
             }}
-            className="w-20 h-16 text-center text-3xl font-bold bg-[var(--card)] border-2 border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-blue)]"
+            className="w-20 h-16 text-center text-3xl font-bold bg-[var(--card)] border-2 border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
 
@@ -88,7 +88,7 @@ export default function TimeSignatureModal({
           <select
             value={denominator}
             onChange={(e) => setDenominator(parseInt(e.target.value))}
-            className="w-20 h-16 text-center text-3xl font-bold bg-[var(--card)] border-2 border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-blue)] cursor-pointer appearance-none"
+            className="w-20 h-16 text-center text-3xl font-bold bg-[var(--card)] border-2 border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer appearance-none"
           >
             {TIME_SIGNATURE.DENOMINATOR.OPTIONS.map((den) => (
               <option key={den} value={den}>
@@ -108,7 +108,7 @@ export default function TimeSignatureModal({
         </button>
         <button
           onClick={handleApply}
-          className="flex-1 h-12 rounded-xl bg-[var(--accent-blue)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
+          className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
         >
           Apply
         </button>

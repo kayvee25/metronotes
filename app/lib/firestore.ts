@@ -189,6 +189,20 @@ export async function migrateLocalToFirestore(userId: string): Promise<void> {
     await setDoc(doc(db, 'users', userId, 'setlists', id), data);
   }
 
+  // Upload attachments for each song
+  for (const song of localSongs) {
+    const attKey = `metronotes_attachments_${song.id}`;
+    const attData = localStorage.getItem(attKey);
+    if (attData) {
+      const attachments: Attachment[] = JSON.parse(attData);
+      for (const att of attachments) {
+        const { id, ...data } = att;
+        await setDoc(doc(db, 'users', userId, 'songs', song.id, 'attachments', id), data);
+      }
+      localStorage.removeItem(attKey);
+    }
+  }
+
   // Clear localStorage
   localStorage.removeItem(SONGS_KEY);
   localStorage.removeItem(SETLISTS_KEY);

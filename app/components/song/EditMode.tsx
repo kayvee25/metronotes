@@ -36,6 +36,7 @@ interface EditModeProps {
   onEditAttachment: (attachment: Attachment) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onToggleDefaultAttachment: (attachmentId: string) => void;
+  onRenameAttachment: (attachmentId: string, name: string) => void;
   onReorderAttachments: (orderedIds: string[]) => void;
   onAddTextAttachment: () => void;
   onAddImageAttachment: () => void;
@@ -68,6 +69,7 @@ export default function EditMode({
   onEditAttachment,
   onDeleteAttachment,
   onToggleDefaultAttachment,
+  onRenameAttachment,
   onReorderAttachments,
   onAddTextAttachment,
   onAddImageAttachment,
@@ -254,6 +256,7 @@ export default function EditMode({
         onEdit={onEditAttachment}
         onDelete={onDeleteAttachment}
         onToggleDefault={onToggleDefaultAttachment}
+        onNameChange={onRenameAttachment}
         onReorder={onReorderAttachments}
         onAddText={onAddTextAttachment}
         onAddImage={onAddImageAttachment}

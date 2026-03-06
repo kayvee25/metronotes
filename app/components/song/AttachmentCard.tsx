@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Attachment } from '../../types';
 
 interface AttachmentCardProps {
@@ -7,6 +8,7 @@ interface AttachmentCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onToggleDefault: () => void;
+  onNameChange: (name: string) => void;
   dragHandleProps?: Record<string, unknown>;
 }
 
@@ -31,10 +33,12 @@ export default function AttachmentCard({
   onEdit,
   onDelete,
   onToggleDefault,
+  onNameChange,
   dragHandleProps,
 }: AttachmentCardProps) {
   const isText = attachment.type === 'richtext';
   const preview = isText ? getTextPreview(attachment.content) : attachment.fileName || 'Image';
+  const [localName, setLocalName] = useState(attachment.name || '');
 
   return (
     <div className="flex items-center gap-2 px-3 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl">
@@ -64,11 +68,20 @@ export default function AttachmentCard({
         )}
       </div>
 
-      {/* Preview */}
+      {/* Name + preview */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-[var(--foreground)] truncate">
-          {isText ? 'Text' : 'Image'}
-        </p>
+        <input
+          type="text"
+          value={localName}
+          onChange={(e) => setLocalName(e.target.value)}
+          onBlur={() => {
+            if (localName !== (attachment.name || '')) {
+              onNameChange(localName);
+            }
+          }}
+          placeholder={isText ? 'Text' : 'Image'}
+          className="text-sm text-[var(--foreground)] bg-transparent w-full truncate placeholder:text-[var(--foreground)] focus:placeholder:text-[var(--muted)] outline-none"
+        />
         <p className="text-xs text-[var(--muted)] truncate">{preview}</p>
       </div>
 

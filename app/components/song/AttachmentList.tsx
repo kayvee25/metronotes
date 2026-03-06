@@ -26,6 +26,7 @@ interface AttachmentListProps {
   onEdit: (attachment: Attachment) => void;
   onDelete: (attachmentId: string) => void;
   onToggleDefault: (attachmentId: string) => void;
+  onNameChange: (attachmentId: string, name: string) => void;
   onReorder: (orderedIds: string[]) => void;
   onAddText: () => void;
   onAddImage: () => void;
@@ -36,11 +37,13 @@ function SortableCard({
   onEdit,
   onDelete,
   onToggleDefault,
+  onNameChange,
 }: {
   attachment: Attachment;
   onEdit: () => void;
   onDelete: () => void;
   onToggleDefault: () => void;
+  onNameChange: (name: string) => void;
 }) {
   const {
     attributes,
@@ -64,6 +67,7 @@ function SortableCard({
         onEdit={onEdit}
         onDelete={onDelete}
         onToggleDefault={onToggleDefault}
+        onNameChange={onNameChange}
         dragHandleProps={listeners}
       />
     </div>
@@ -75,6 +79,7 @@ export default function AttachmentList({
   onEdit,
   onDelete,
   onToggleDefault,
+  onNameChange,
   onReorder,
   onAddText,
   onAddImage,
@@ -171,6 +176,7 @@ export default function AttachmentList({
                 onEdit={() => onEdit(attachment)}
                 onDelete={() => handleDelete(attachment.id)}
                 onToggleDefault={() => onToggleDefault(attachment.id)}
+                onNameChange={(name) => onNameChange(attachment.id, name)}
               />
             ))}
           </div>

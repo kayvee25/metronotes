@@ -330,6 +330,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onEditAttachment={handleEditAttachment}
           onDeleteAttachment={deleteAttachment}
           onToggleDefaultAttachment={setDefault}
+          onRenameAttachment={(id, name) => updateAttachment(id, { name })}
           onReorderAttachments={reorderAttachments}
           onAddTextAttachment={handleAddText}
           onAddImageAttachment={handleAddImage}

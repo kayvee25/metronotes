@@ -29,6 +29,7 @@ export type AttachmentType = 'richtext' | 'image';
 export interface Attachment {
   id: string;
   type: AttachmentType;
+  name?: string;
   order: number;
   isDefault: boolean;
 

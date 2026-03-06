@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 
 interface ConfirmOptions {
   title: string;
@@ -39,6 +39,16 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     resolveRef.current = null;
   }, []);
 
+  // Escape key to dismiss
+  useEffect(() => {
+    if (!options) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [options, handleClose]);
+
   return (
     <ConfirmContext value={{ confirm }}>
       {children}
@@ -48,10 +58,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClick={() => handleClose(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
             className="bg-[var(--background)] rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-[var(--border)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold text-[var(--foreground)] text-center mb-2">
+            <h2 id="confirm-title" className="text-lg font-bold text-[var(--foreground)] text-center mb-2">
               {options.title}
             </h2>
             <p className="text-sm text-[var(--muted)] text-center mb-6">

@@ -47,6 +47,8 @@ interface FormState {
 interface OriginalValues {
   name: string;
   artist: string;
+  bpm: number;
+  timeSignature: string;
   musicalKey: string;
 }
 
@@ -66,6 +68,8 @@ function getOriginalValues(song?: Song | null): OriginalValues {
   return {
     name: song?.name || '',
     artist: song?.artist || '',
+    bpm: song?.bpm || BPM.DEFAULT,
+    timeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT,
     musicalKey: song?.key || '',
   };
 }
@@ -138,6 +142,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const isDirty =
     name !== savedValues.name ||
     artist !== savedValues.artist ||
+    bpm !== savedValues.bpm ||
+    timeSignature !== savedValues.timeSignature ||
     musicalKey !== savedValues.musicalKey;
 
   // Notify parent of dirty state changes
@@ -166,6 +172,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       setSavedValues({
         name: name.trim() || song.name,
         artist: artist.trim(),
+        bpm,
+        timeSignature,
         musicalKey,
       });
     } else {

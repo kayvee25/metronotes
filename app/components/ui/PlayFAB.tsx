@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import PlayButton from './PlayButton';
 import { formatDuration } from '../../lib/audio-processing';
-import { AUDIO } from '../../lib/constants';
+
 
 type AudioMode = 'metronome' | 'backingtrack' | 'off';
 
@@ -37,7 +37,6 @@ interface PlayFABProps {
   hasBackingTrack?: boolean;
   backingTrackControls?: BackingTrackControls;
   countInBars?: number;
-  onCountInBarsChange?: (bars: number) => void;
 }
 
 function ModeSwitch({
@@ -49,25 +48,22 @@ function ModeSwitch({
   onAudioModeChange: (mode: AudioMode) => void;
   hasBackingTrack: boolean;
 }) {
-  const modes: { value: AudioMode; label: string; disabled?: boolean }[] = [
+  const modes: { value: AudioMode; label: string }[] = [
     { value: 'metronome', label: 'Click' },
-    { value: 'backingtrack', label: 'Track', disabled: !hasBackingTrack },
+    ...(hasBackingTrack ? [{ value: 'backingtrack' as AudioMode, label: 'Track' }] : []),
     { value: 'off', label: 'Off' },
   ];
 
   return (
     <div className="flex rounded-lg bg-[var(--background)] p-0.5 mb-3" role="group" aria-label="Audio mode">
-      {modes.map(({ value, label, disabled }) => (
+      {modes.map(({ value, label }) => (
         <button
           key={value}
-          onClick={() => !disabled && onAudioModeChange(value)}
-          disabled={disabled}
+          onClick={() => onAudioModeChange(value)}
           className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${
             audioMode === value
               ? 'bg-[var(--accent)] text-white'
-              : disabled
-                ? 'text-[var(--muted)]/40 cursor-not-allowed'
-                : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+              : 'text-[var(--muted)] hover:text-[var(--foreground)]'
           }`}
           aria-label={`${label} mode`}
         >
@@ -78,32 +74,13 @@ function ModeSwitch({
   );
 }
 
-function CountInSelector({
-  countInBars,
-  onCountInBarsChange,
-}: {
-  countInBars: number;
-  onCountInBarsChange: (bars: number) => void;
-}) {
+function CountInBadge({ countInBars }: { countInBars: number }) {
+  const label = countInBars === 0 ? 'No count-in' : `${countInBars} bar${countInBars > 1 ? 's' : ''} count-in`;
   return (
-    <div className="flex items-center gap-2 mt-2">
-      <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">Count-in</span>
-      <div className="flex rounded-lg bg-[var(--background)] p-0.5 flex-1" role="group" aria-label="Count-in bars">
-        {(AUDIO.COUNT_IN_OPTIONS as readonly number[]).map((bars) => (
-          <button
-            key={bars}
-            onClick={() => onCountInBarsChange(bars)}
-            className={`flex-1 py-1 text-[11px] font-semibold rounded-md transition-colors ${
-              countInBars === bars
-                ? 'bg-[var(--accent)] text-white'
-                : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-            }`}
-            aria-label={`${bars} bar${bars > 1 ? 's' : ''} count-in`}
-          >
-            {bars}
-          </button>
-        ))}
-      </div>
+    <div className="flex items-center justify-center gap-1.5 mt-2 text-[10px] text-[var(--muted)]">
+      <span className="uppercase tracking-wider font-medium">Count-in</span>
+      <span className="font-bold text-[var(--foreground)]">{countInBars === 0 ? 'Off' : `${countInBars} bar${countInBars > 1 ? 's' : ''}`}</span>
+      <span className="sr-only">{label}</span>
     </div>
   );
 }
@@ -122,7 +99,6 @@ export default function PlayFAB({
   hasBackingTrack = false,
   backingTrackControls,
   countInBars = 1,
-  onCountInBarsChange,
 }: PlayFABProps) {
   const [panelOpen, setPanelOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -359,13 +335,8 @@ export default function PlayFAB({
                 </svg>
               </div>
 
-              {/* Count-in selector */}
-              {onCountInBarsChange && (
-                <CountInSelector
-                  countInBars={countInBars}
-                  onCountInBarsChange={onCountInBarsChange}
-                />
-              )}
+              {/* Count-in display */}
+              <CountInBadge countInBars={countInBars} />
             </>
           )}
 

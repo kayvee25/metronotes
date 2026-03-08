@@ -47,7 +47,6 @@ interface PerformanceModeProps {
     onVolumeChange: (vol: number) => void;
   };
   countInBars?: number;
-  onCountInBarsChange?: (bars: number) => void;
 }
 
 export default function PerformanceMode({
@@ -78,7 +77,6 @@ export default function PerformanceMode({
   hasBackingTrack,
   backingTrackControls,
   countInBars,
-  onCountInBarsChange,
 }: PerformanceModeProps) {
   const hasPrev = setlist && songIndex > 0;
   const hasNext = setlist && songIndex < (setlist.songIds.length - 1);
@@ -267,7 +265,6 @@ export default function PerformanceMode({
         hasBackingTrack={hasBackingTrack}
         backingTrackControls={backingTrackControls}
         countInBars={countInBars}
-        onCountInBarsChange={onCountInBarsChange}
       />
     </div>
   );

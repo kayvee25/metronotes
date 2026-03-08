@@ -98,9 +98,9 @@ export async function downloadAndCache(attachmentId: string, storageUrl: string)
   }
 }
 
-/** Check if a set of attachments are all cached (only considers image/pdf types). */
+/** Check if a set of attachments are all cached (image/pdf/audio with storageUrl). */
 export async function areAttachmentsCached(attachments: { id: string; type: string; storageUrl?: string }[]): Promise<boolean> {
-  const mediaAttachments = attachments.filter(a => (a.type === 'image' || a.type === 'pdf') && a.storageUrl);
+  const mediaAttachments = attachments.filter(a => (a.type === 'image' || a.type === 'pdf' || a.type === 'audio') && a.storageUrl);
   if (mediaAttachments.length === 0) return true;
   const cachedIds = await getCachedAttachmentIds();
   return mediaAttachments.every(a => cachedIds.has(a.id));
@@ -108,8 +108,22 @@ export async function areAttachmentsCached(attachments: { id: string; type: stri
 
 /** Returns the number of media attachments that need downloading. */
 export async function countUncached(attachments: { id: string; type: string; storageUrl?: string }[]): Promise<number> {
-  const mediaAttachments = attachments.filter(a => (a.type === 'image' || a.type === 'pdf') && a.storageUrl);
+  const mediaAttachments = attachments.filter(a => (a.type === 'image' || a.type === 'pdf' || a.type === 'audio') && a.storageUrl);
   if (mediaAttachments.length === 0) return 0;
   const cachedIds = await getCachedAttachmentIds();
   return mediaAttachments.filter(a => !cachedIds.has(a.id)).length;
+}
+
+/**
+ * Preload an audio attachment into the offline cache if not already cached.
+ * Silently fails — intended for opportunistic prefetching (e.g. next song in setlist).
+ */
+export async function preloadAudio(attachments: { id: string; type: string; storageUrl?: string }[]): Promise<void> {
+  const audio = attachments.find(a => a.type === 'audio' && a.storageUrl);
+  if (!audio || !audio.storageUrl) return;
+  try {
+    await downloadAndCache(audio.id, audio.storageUrl);
+  } catch {
+    // Silently ignore — preloading is best-effort
+  }
 }

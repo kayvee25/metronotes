@@ -60,7 +60,7 @@ export const AUDIO = {
   },
   MAX_AUDIO_SIZE: 10 * 1024 * 1024, // 10MB per audio file
   ACCEPTED_AUDIO_TYPES: ['audio/mpeg'] as readonly string[],
-  COUNT_IN_OPTIONS: [1, 2, 4] as const,
+  COUNT_IN_OPTIONS: [0, 1, 2, 4] as const,
   DEFAULT_COUNT_IN_BARS: 1,
 } as const;
 

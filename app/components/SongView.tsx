@@ -12,6 +12,8 @@ import { compressImage, validateFileSize, validateSongStorage } from '../lib/ima
 import { validateAudioFile, extractAudioDuration } from '../lib/audio-processing';
 import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
 import { loadPdfJs } from '../lib/pdf-loader';
+import { preloadAudio } from '../lib/offline-cache';
+import { firestoreGetAttachments } from '../lib/firestore';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
@@ -155,7 +157,21 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     songId: song?.id || null,
     attachments,
     metronomeSound,
+    onError: toast,
   });
+
+  // Preload next song's audio when in setlist mode
+  useEffect(() => {
+    if (!setlist || !user?.uid) return;
+    const nextIndex = songIndex + 1;
+    if (nextIndex >= setlist.songIds.length) return;
+    const nextSongId = setlist.songIds[nextIndex];
+    let cancelled = false;
+    firestoreGetAttachments(user.uid, nextSongId).then(nextAttachments => {
+      if (!cancelled) preloadAudio(nextAttachments);
+    }).catch(() => { /* best-effort */ });
+    return () => { cancelled = true; };
+  }, [setlist, songIndex, user?.uid]);
 
   // Migrate plain-text notes to attachment on first load
   useEffect(() => {
@@ -561,7 +577,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           hasBackingTrack={hasBackingTrack}
           backingTrackControls={backingTrackControls}
           countInBars={countInBars}
-          onCountInBarsChange={setCountInBars}
         />
       ) : (
         <EditMode

@@ -10,6 +10,7 @@ interface UseBackingTrackOptions {
   songId: string | null;
   attachments: Attachment[];
   metronomeSound?: MetronomeSound;
+  onError?: (message: string) => void;
 }
 
 interface UseBackingTrackReturn {
@@ -35,6 +36,7 @@ export function useBackingTrack({
   songId,
   attachments,
   metronomeSound = 'default',
+  onError,
 }: UseBackingTrackOptions): UseBackingTrackReturn {
   const track = attachments.find(a => a.type === 'audio') ?? null;
 
@@ -55,11 +57,13 @@ export function useBackingTrack({
   const countInCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const metronomeSoundRef = useRef(metronomeSound);
+  const onErrorRef = useRef(onError);
 
-  // Keep sound ref in sync
+  // Keep refs in sync
   useEffect(() => {
     metronomeSoundRef.current = metronomeSound;
-  }, [metronomeSound]);
+    onErrorRef.current = onError;
+  }, [metronomeSound, onError]);
 
   // Create Audio element once
   useEffect(() => {
@@ -157,9 +161,21 @@ export function useBackingTrack({
       }
     };
 
-    const onError = () => {
+    const onAudioError = () => {
+      // Ignore errors when no real source is set (e.g. clearing src to '')
+      if (!audio.src || audio.src === window.location.href) return;
       console.warn('[useBackingTrack] Audio error:', audio.error);
       setIsPlaying(false);
+      const code = audio.error?.code;
+      if (code === MediaError.MEDIA_ERR_NETWORK) {
+        onErrorRef.current?.('Network error — check your connection');
+      } else if (code === MediaError.MEDIA_ERR_DECODE) {
+        onErrorRef.current?.('Could not play this audio file');
+      } else if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        onErrorRef.current?.('Audio format not supported');
+      } else {
+        onErrorRef.current?.('Playback error');
+      }
     };
 
     const onProgress = () => {
@@ -170,13 +186,13 @@ export function useBackingTrack({
 
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('ended', onEnded);
-    audio.addEventListener('error', onError);
+    audio.addEventListener('error', onAudioError);
     audio.addEventListener('progress', onProgress);
 
     return () => {
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('error', onError);
+      audio.removeEventListener('error', onAudioError);
       audio.removeEventListener('progress', onProgress);
     };
   }, []);
@@ -255,6 +271,7 @@ export function useBackingTrack({
         setIsPlaying(true);
       }).catch(err => {
         console.warn('[useBackingTrack] Play failed:', err);
+        onErrorRef.current?.('Could not start playback');
       });
       return;
     }
@@ -310,6 +327,7 @@ export function useBackingTrack({
       audio.play().catch(err => {
         console.warn('[useBackingTrack] Play after count-in failed:', err);
         setIsPlaying(false);
+        onErrorRef.current?.('Could not start playback after count-in');
       });
     }, countInDuration);
   }, [audioUrl]);

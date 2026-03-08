@@ -333,6 +333,8 @@ export default function EditMode({
           onBtPlay={onBtPlay}
           onBtPause={onBtPause}
           onBtSeek={onBtSeek}
+          countInBars={countInBars}
+          onCountInBarsChange={onCountInBarsChange}
         />
       </div>
 
@@ -351,7 +353,6 @@ export default function EditMode({
         hasBackingTrack={hasBackingTrack}
         backingTrackControls={backingTrackControls}
         countInBars={countInBars}
-        onCountInBarsChange={onCountInBarsChange}
       />
     </div>
   );

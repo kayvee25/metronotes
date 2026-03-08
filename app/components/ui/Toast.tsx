@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { ANIMATION } from '../../lib/constants';
 
 type ToastVariant = 'error' | 'success' | 'info';
 
@@ -33,7 +34,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   useEffect(() => {
     const timer = setTimeout(() => {
       setExiting(true);
-      setTimeout(() => onDismiss(toast.id), 200);
+      setTimeout(() => onDismiss(toast.id), ANIMATION.TOAST_EXIT_MS);
     }, toast.duration);
     return () => clearTimeout(timer);
   }, [toast.id, toast.duration, onDismiss]);
@@ -50,7 +51,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
       <button
         onClick={() => {
           setExiting(true);
-          setTimeout(() => onDismiss(toast.id), 200);
+          setTimeout(() => onDismiss(toast.id), ANIMATION.TOAST_EXIT_MS);
         }}
         className="opacity-75 hover:opacity-100 text-lg leading-none flex-shrink-0"
         aria-label="Dismiss"
@@ -65,7 +66,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const idCounter = useRef(0);
 
-  const addToast = useCallback((message: string, variant: ToastVariant = 'error', duration: number = 4000) => {
+  const addToast = useCallback((message: string, variant: ToastVariant = 'error', duration: number = ANIMATION.TOAST_AUTO_DISMISS_MS) => {
     const id = `toast-${++idCounter.current}`;
     setToasts((prev) => [...prev.slice(-4), { id, message, variant, duration }]);
   }, []);

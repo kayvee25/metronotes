@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Setlist, SetlistInput, SetlistUpdate } from '../types';
 import { storage } from '../lib/storage';
 import { useAuth } from './useAuth';
@@ -16,6 +16,9 @@ export function useSetlists(onError?: (message: string) => void) {
   const [setlists, setSetlists] = useState<Setlist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   const isGuest = authState === 'guest';
   const userId = user?.uid;
@@ -79,7 +82,7 @@ export function useSetlists(onError?: (message: string) => void) {
         setSetlists(prev => prev.map(s => s.id === tempId ? setlist : s));
       }).catch(() => {
         setSetlists(prev => prev.filter(s => s.id !== tempId));
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
       });
     }
     return tempSetlist;
@@ -103,7 +106,7 @@ export function useSetlists(onError?: (message: string) => void) {
 
     if (userId) {
       firestoreUpdateSetlist(userId, id, update).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
       });
     }
@@ -121,7 +124,7 @@ export function useSetlists(onError?: (message: string) => void) {
 
     if (userId) {
       firestoreDeleteSetlist(userId, id).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
       });
     }
@@ -149,7 +152,7 @@ export function useSetlists(onError?: (message: string) => void) {
 
     if (userId) {
       firestoreUpdateSetlist(userId, setlistId, update).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
       });
     }
@@ -173,7 +176,7 @@ export function useSetlists(onError?: (message: string) => void) {
 
     if (userId) {
       firestoreUpdateSetlist(userId, setlistId, update).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
       });
     }
@@ -197,7 +200,7 @@ export function useSetlists(onError?: (message: string) => void) {
 
     if (userId) {
       firestoreUpdateSetlist(userId, setlistId, update).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
       });
     }

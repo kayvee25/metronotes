@@ -101,6 +101,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [savedValues, setSavedValues] = useState<OriginalValues>(() => getOriginalValues(song));
   const migrationRef = useRef(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const {
     bpm,
@@ -146,11 +147,13 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   // Compute dirty state
   const { name, artist, musicalKey, mode } = formState;
   const isDirty =
-    name !== savedValues.name ||
-    artist !== savedValues.artist ||
-    bpm !== savedValues.bpm ||
-    timeSignature !== savedValues.timeSignature ||
-    musicalKey !== savedValues.musicalKey;
+    !isUploading && (
+      name !== savedValues.name ||
+      artist !== savedValues.artist ||
+      bpm !== savedValues.bpm ||
+      timeSignature !== savedValues.timeSignature ||
+      musicalKey !== savedValues.musicalKey
+    );
 
   // Notify parent of dirty state changes
   const prevDirtyRef = useRef(false);
@@ -167,18 +170,19 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const setMode = (mode: Mode) => setFormState(s => ({ ...s, mode }));
 
   const handleSave = () => {
+    const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpm));
     if (song) {
       onSave({
         name: name.trim() || song.name,
         artist: artist.trim() || undefined,
-        bpm,
+        bpm: clampedBpm,
         timeSignature,
         key: musicalKey || undefined,
       });
       setSavedValues({
         name: name.trim() || song.name,
         artist: artist.trim(),
-        bpm,
+        bpm: clampedBpm,
         timeSignature,
         musicalKey,
       });
@@ -189,7 +193,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onSave({
           name: name.trim(),
           artist: artist.trim() || undefined,
-          bpm,
+          bpm: clampedBpm,
           timeSignature,
           key: musicalKey || undefined,
         });
@@ -199,10 +203,11 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
 
   const handleSaveWithName = () => {
     if (!name.trim()) return;
+    const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpm));
     onSave({
       name: name.trim(),
       artist: artist.trim() || undefined,
-      bpm,
+      bpm: clampedBpm,
       timeSignature,
       key: musicalKey || undefined,
     });
@@ -320,10 +325,9 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !songId || !userId) return;
-    // Reset input so same file can be selected again
     e.target.value = '';
 
-
+    setIsUploading(true);
     try {
       const { blob, width, height } = await compressImage(file);
       const attachment = await addImage({
@@ -341,6 +345,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setIsUploading(false);
     }
   }, [songId, userId, attachments.length, addImage, updateAttachment, toast]);
 
@@ -349,20 +355,17 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     if (!file || !songId || !userId) return;
     e.target.value = '';
 
-    // Validate MIME type
     if (file.type !== 'application/pdf') {
       toast('This file is not a valid PDF');
       return;
     }
 
-    // Validate file size
     const sizeError = validateFileSize(file.size, 'pdf');
     if (sizeError) {
       toast(sizeError);
       return;
     }
 
-    // Validate song storage total
     const currentTotal = attachments.reduce((sum, a) => sum + (a.fileSize || 0), 0);
     const songError = validateSongStorage(currentTotal, file.size);
     if (songError) {
@@ -370,8 +373,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       return;
     }
 
+    setIsUploading(true);
     try {
-      // Extract page count using PDF.js (lazy-loaded via shared loader)
       let pageCount = 0;
       try {
         const pdfjs = await loadPdfJs();
@@ -380,7 +383,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         pageCount = pdf.numPages;
         pdf.destroy();
       } catch {
-        // If page count extraction fails, still allow upload
         pageCount = 0;
       }
 
@@ -398,6 +400,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
     } catch (err) {
       toast(err instanceof Error ? err.message : 'PDF upload failed');
+    } finally {
+      setIsUploading(false);
     }
   }, [songId, userId, attachments, addImage, updateAttachment, toast]);
 

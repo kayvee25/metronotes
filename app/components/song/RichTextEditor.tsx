@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { useConfirm } from '../ui/ConfirmModal';
+import { ANIMATION } from '../../lib/constants';
 import EditorToolbar from './EditorToolbar';
 
 interface RichTextEditorProps {
@@ -56,7 +57,7 @@ export default function RichTextEditor({
       setTimeout(() => {
         setEditorDirty(false);
         editor.commands.focus('end');
-      }, 100);
+      }, ANIMATION.EDITOR_FOCUS_DELAY_MS);
     }
   }, [isOpen, editor, content]);
 

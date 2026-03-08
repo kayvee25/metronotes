@@ -14,14 +14,8 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function getTimestamp(): string {
-  return new Date().toISOString();
-}
+import { generateId, getTimestamp } from './utils';
+import { STORAGE_KEYS } from './constants';
 
 function songsCollection(userId: string) {
   return collection(db, 'users', userId, 'songs');
@@ -168,11 +162,8 @@ export async function firestoreReorderAttachments(userId: string, songId: string
 // Migration: upload localStorage data to Firestore
 
 export async function migrateLocalToFirestore(userId: string): Promise<void> {
-  const SONGS_KEY = 'metronotes_songs';
-  const SETLISTS_KEY = 'metronotes_setlists';
-
-  const songsData = localStorage.getItem(SONGS_KEY);
-  const setlistsData = localStorage.getItem(SETLISTS_KEY);
+  const songsData = localStorage.getItem(STORAGE_KEYS.SONGS);
+  const setlistsData = localStorage.getItem(STORAGE_KEYS.SETLISTS);
 
   const localSongs: Song[] = songsData ? JSON.parse(songsData) : [];
   const localSetlists: Setlist[] = setlistsData ? JSON.parse(setlistsData) : [];
@@ -191,7 +182,7 @@ export async function migrateLocalToFirestore(userId: string): Promise<void> {
 
   // Upload attachments for each song
   for (const song of localSongs) {
-    const attKey = `metronotes_attachments_${song.id}`;
+    const attKey = STORAGE_KEYS.attachments(song.id);
     const attData = localStorage.getItem(attKey);
     if (attData) {
       const attachments: Attachment[] = JSON.parse(attData);
@@ -204,6 +195,6 @@ export async function migrateLocalToFirestore(userId: string): Promise<void> {
   }
 
   // Clear localStorage
-  localStorage.removeItem(SONGS_KEY);
-  localStorage.removeItem(SETLISTS_KEY);
+  localStorage.removeItem(STORAGE_KEYS.SONGS);
+  localStorage.removeItem(STORAGE_KEYS.SETLISTS);
 }

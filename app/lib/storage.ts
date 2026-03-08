@@ -1,4 +1,6 @@
 import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
+import { generateId, getTimestamp } from './utils';
+import { STORAGE_KEYS } from './constants';
 
 export interface StorageAdapter {
   // Songs
@@ -24,24 +26,13 @@ export interface StorageAdapter {
   reorderAttachments(songId: string, orderedIds: string[]): void;
 }
 
-const SONGS_KEY = 'metronotes_songs';
-const SETLISTS_KEY = 'metronotes_setlists';
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function getTimestamp(): string {
-  return new Date().toISOString();
-}
-
 class LocalStorageAdapter implements StorageAdapter {
   private isClient = typeof window !== 'undefined';
 
   // Songs
   getSongs(): Song[] {
     if (!this.isClient) return [];
-    const data = localStorage.getItem(SONGS_KEY);
+    const data = localStorage.getItem(STORAGE_KEYS.SONGS);
     return data ? JSON.parse(data) : [];
   }
 
@@ -100,13 +91,13 @@ class LocalStorageAdapter implements StorageAdapter {
 
   private saveSongs(songs: Song[]): void {
     if (!this.isClient) return;
-    localStorage.setItem(SONGS_KEY, JSON.stringify(songs));
+    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(songs));
   }
 
   // Setlists
   getSetlists(): Setlist[] {
     if (!this.isClient) return [];
-    const data = localStorage.getItem(SETLISTS_KEY);
+    const data = localStorage.getItem(STORAGE_KEYS.SETLISTS);
     return data ? JSON.parse(data) : [];
   }
 
@@ -154,12 +145,12 @@ class LocalStorageAdapter implements StorageAdapter {
 
   private saveSetlists(setlists: Setlist[]): void {
     if (!this.isClient) return;
-    localStorage.setItem(SETLISTS_KEY, JSON.stringify(setlists));
+    localStorage.setItem(STORAGE_KEYS.SETLISTS, JSON.stringify(setlists));
   }
 
   // Attachments
   private attachmentsKey(songId: string): string {
-    return `metronotes_attachments_${songId}`;
+    return STORAGE_KEYS.attachments(songId);
   }
 
   getAttachments(songId: string): Attachment[] {

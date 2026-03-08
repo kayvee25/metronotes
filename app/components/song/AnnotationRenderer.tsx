@@ -1,6 +1,5 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
 import getStroke from 'perfect-freehand';
 import { AnnotationLayer } from '../../types';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Attachment, AttachmentInput, AttachmentUpdate } from '../types';
 import { storage } from '../lib/storage';
 import { useAuth } from './useAuth';
@@ -20,6 +20,10 @@ export function useAttachments(songId: string | null, onError?: (message: string
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Stabilize onError with a ref to avoid stale closures
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   const isGuest = authState === 'guest';
   const userId = user?.uid;
@@ -85,7 +89,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
         setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
       }).catch(() => {
         setAttachments(prev => prev.filter(a => a.id !== tempId));
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
       });
     }
 
@@ -114,7 +118,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
         return attachment;
       } catch {
         setAttachments(prev => prev.filter(a => a.id !== tempId));
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         throw new Error('Upload failed');
       }
     }
@@ -138,7 +142,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
 
     if (userId) {
       firestoreUpdateAttachment(userId, songId, attachmentId, update).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }
@@ -184,12 +188,12 @@ export function useAttachments(songId: string | null, onError?: (message: string
         deletePromise.then(() =>
           firestoreUpdateAttachment(userId, songId, remaining[0].id, { isDefault: true })
         ).catch(() => {
-          onError?.("Can't save — check your internet connection.");
+          onErrorRef.current?.("Can't save — check your internet connection.");
           firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
         });
       } else {
         deletePromise.catch(() => {
-          onError?.("Can't save — check your internet connection.");
+          onErrorRef.current?.("Can't save — check your internet connection.");
           firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
         });
       }
@@ -219,7 +223,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
 
     if (userId) {
       firestoreDeleteAllAttachments(userId, songId).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }
@@ -249,7 +253,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
 
     if (userId) {
       firestoreReorderAttachments(userId, songId, orderedIds).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }
@@ -284,7 +288,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
         firestoreUpdateAttachment(userId, songId, a.id, { isDefault: a.id === attachmentId })
       );
       Promise.all(updates).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }

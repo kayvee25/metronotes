@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored / generated files in public
+    "public/sw.js",
+    "public/workbox-*.js",
+    "public/pdf.worker.min.mjs",
   ]),
 ]);
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import Modal from './Modal';
 
 interface ConfirmOptions {
   title: string;
@@ -52,22 +53,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   return (
     <ConfirmContext value={{ confirm }}>
       {children}
-      {options && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => handleClose(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-title"
-            className="bg-[var(--background)] rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-[var(--border)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="confirm-title" className="text-lg font-bold text-[var(--foreground)] text-center mb-2">
-              {options.title}
-            </h2>
-            <p className="text-sm text-[var(--muted)] text-center mb-6">
+      <Modal isOpen={!!options} onClose={() => handleClose(false)} title={options?.title || ''}>
+        {options && (
+          <>
+            <p className="text-sm text-[var(--muted)] text-center mb-6 -mt-2">
               {options.message}
             </p>
             <div className="flex gap-3">
@@ -89,9 +78,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 {options.confirmLabel || 'Confirm'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </ConfirmContext>
   );
 }

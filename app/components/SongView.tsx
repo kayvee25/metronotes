@@ -363,11 +363,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   }, [isNewDrawing, editingDrawing, addImage, attachments.length, updateAttachment]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddImage = useCallback(() => {
     fileInputRef.current?.click();
+  }, []);
+
+  const handleAddCamera = useCallback(() => {
+    cameraInputRef.current?.click();
   }, []);
 
   const handleAddPdf = useCallback(() => {
@@ -703,6 +708,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onReorderAttachments={reorderAttachments}
           onAddTextAttachment={handleAddText}
           onAddImageAttachment={handleAddImage}
+          onAddCameraAttachment={handleAddCamera}
           onAddPdfAttachment={handleAddPdf}
           onAddDrawingAttachment={handleAddDrawing}
           audioAttachment={audioAttachment}
@@ -794,6 +800,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* Hidden file input for camera capture */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         className="hidden"
         onChange={handleFileSelected}
       />

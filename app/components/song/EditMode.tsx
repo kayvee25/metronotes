@@ -42,6 +42,7 @@ interface EditModeProps {
   onReorderAttachments: (orderedIds: string[]) => void;
   onAddTextAttachment: () => void;
   onAddImageAttachment: () => void;
+  onAddCameraAttachment: () => void;
   onAddPdfAttachment: () => void;
   onAddDrawingAttachment: () => void;
   // Backing track
@@ -112,6 +113,7 @@ export default function EditMode({
   onReorderAttachments,
   onAddTextAttachment,
   onAddImageAttachment,
+  onAddCameraAttachment,
   onAddPdfAttachment,
   onAddDrawingAttachment,
   audioAttachment,
@@ -337,6 +339,7 @@ export default function EditMode({
           onReorder={onReorderAttachments}
           onAddText={onAddTextAttachment}
           onAddImage={onAddImageAttachment}
+          onAddCamera={onAddCameraAttachment}
           onAddPdf={onAddPdfAttachment}
           onAddDrawing={onAddDrawingAttachment}
           onAddFromCloud={onAddFromCloud}

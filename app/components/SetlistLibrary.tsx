@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useConfirm } from './ui/ConfirmModal';
-import { Setlist, SetlistInput } from '../types';
+import { Song, Setlist, SetlistInput } from '../types';
 import { useSetlists } from '../hooks/useSetlists';
-import { useSongs } from '../hooks/useSongs';
+import { useToast } from './ui/Toast';
 import SetlistForm from './SetlistForm';
 import SetlistDetail from './SetlistDetail';
 import {
@@ -43,14 +43,15 @@ function sortSetlists(setlists: Setlist[], sort: SetlistSortOption): Setlist[] {
 }
 
 interface SetlistLibraryProps {
+  songs: Song[];
   onPlaySetlist?: (setlist: Setlist, startIndex?: number) => void;
   initialViewSetlistId?: string | null;
   onInitialViewConsumed?: () => void;
 }
 
-export default function SetlistLibrary({ onPlaySetlist, initialViewSetlistId, onInitialViewConsumed }: SetlistLibraryProps) {
-  const { setlists, isLoading, error, createSetlist, updateSetlist, deleteSetlist, refresh } = useSetlists();
-  const { songs } = useSongs();
+export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlistId, onInitialViewConsumed }: SetlistLibraryProps) {
+  const { toast } = useToast();
+  const { setlists, isLoading, error, createSetlist, updateSetlist, deleteSetlist, refresh } = useSetlists(toast);
   const [showForm, setShowForm] = useState(false);
   const [editingSetlist, setEditingSetlist] = useState<Setlist | null>(null);
   const [viewingSetlist, setViewingSetlist] = useState<Setlist | null>(() => {

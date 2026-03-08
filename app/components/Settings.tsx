@@ -1,9 +1,12 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useConfirm } from './ui/ConfirmModal';
 import { FontSize, FontFamily } from '../hooks/usePerformanceSettings';
 import { MetronomeSound } from '../hooks/useMetronomeAudio';
+import { getCacheSize, clearAllCache } from '../lib/offline-cache';
+import { useToast } from './ui/Toast';
 
 const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: 'sm', label: 'Small' },
@@ -97,8 +100,36 @@ export default function Settings({
 }: SettingsProps) {
   const { user, authState, signOut, exitGuestMode } = useAuth();
   const confirmAction = useConfirm();
+  const { toast } = useToast();
   const isGuest = authState === 'guest';
   const wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+
+  const [cacheSize, setCacheSize] = useState<number | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCacheSize().then((size) => {
+      if (!cancelled) setCacheSize(size);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleClearCache = async () => {
+    const ok = await confirmAction({
+      title: 'Clear Cache',
+      message: 'Remove all downloaded offline content? You can re-download it later.',
+      confirmLabel: 'Clear',
+      variant: 'danger',
+    });
+    if (ok) {
+      setClearingCache(true);
+      await clearAllCache();
+      setCacheSize(0);
+      setClearingCache(false);
+      toast('Cache cleared', 'success');
+    }
+  };
 
   const handleSignOut = async () => {
     const ok = await confirmAction({
@@ -207,6 +238,37 @@ export default function Settings({
             />
           </div>
         </div>
+
+        {/* Offline Cache */}
+        {!isGuest && (
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-4">
+            <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Offline Cache</p>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[var(--foreground)] font-medium">Cached Content</p>
+                <p className="text-sm text-[var(--muted)]">
+                  {cacheSize === null
+                    ? 'Calculating...'
+                    : cacheSize === 0
+                      ? 'No cached content'
+                      : cacheSize < 1024 * 1024
+                        ? `${(cacheSize / 1024).toFixed(0)} KB used`
+                        : `${(cacheSize / (1024 * 1024)).toFixed(1)} MB used`}
+                </p>
+              </div>
+              {cacheSize !== null && cacheSize > 0 && (
+                <button
+                  onClick={handleClearCache}
+                  disabled={clearingCache}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--accent-danger)]/10 text-[var(--accent-danger)] hover:bg-[var(--accent-danger)]/20 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {clearingCache ? 'Clearing...' : 'Clear'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* App info */}
         <div className="text-center text-sm text-[var(--muted)] pt-4">

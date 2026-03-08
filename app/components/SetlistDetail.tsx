@@ -1,10 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useConfirm } from './ui/ConfirmModal';
-import { Setlist, Song } from '../types';
+import { Setlist, Song, Attachment } from '../types';
 import { useSetlists } from '../hooks/useSetlists';
+import { useAuth } from '../hooks/useAuth';
+import { useToast } from './ui/Toast';
+import { useOfflineDownload } from '../hooks/useOfflineDownload';
+import { firestoreGetAttachments } from '../lib/firestore';
+import { areAttachmentsCached } from '../lib/offline-cache';
 import SongPicker from './SongPicker';
+import SongDownloadIcon from './ui/SongDownloadIcon';
 import {
   DndContext,
   closestCenter,
@@ -105,6 +111,9 @@ function SortableSongItem({ song, index, onPlay, onRemove }: SortableSongItemPro
         </div>
       </button>
 
+      {/* Download icon */}
+      <SongDownloadIcon songId={song.id} />
+
       {/* Remove button */}
       <button
         onClick={onRemove}
@@ -126,8 +135,13 @@ function SortableSongItem({ song, index, onPlay, onRemove }: SortableSongItemPro
 }
 
 export default function SetlistDetail({ setlist, songs, onBack, onPlay }: SetlistDetailProps) {
-  const { setlists, updateSetlist, removeSongFromSetlist, reorderSongs } = useSetlists();
+  const { toast } = useToast();
+  const { setlists, updateSetlist, removeSongFromSetlist, reorderSongs } = useSetlists(toast);
   const [showSongPicker, setShowSongPicker] = useState(false);
+  const { user, authState } = useAuth();
+  const isGuest = authState === 'guest';
+  const { status: dlStatus, progress: dlProgress, downloadAttachments, errorMessage: dlError } = useOfflineDownload();
+  const [allCached, setAllCached] = useState<boolean | null>(null);
 
   // Get the current setlist from hook state (stays in sync after updates)
   const currentSetlist = setlists.find((s) => s.id === setlist.id) || setlist;
@@ -192,6 +206,62 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
     }
   };
 
+  // Check if all setlist media is cached
+  useEffect(() => {
+    if (isGuest || !user) return;
+    const songIds = currentSetlist.songIds;
+
+    let cancelled = false;
+
+    (async () => {
+      if (songIds.length === 0) {
+        if (!cancelled) setAllCached(null);
+        return;
+      }
+      try {
+        const allAttachments: Attachment[] = [];
+        for (const songId of songIds) {
+          const atts = await firestoreGetAttachments(user.uid, songId);
+          allAttachments.push(...atts);
+        }
+        if (cancelled) return;
+        const cached = await areAttachmentsCached(allAttachments);
+        const hasMedia = allAttachments.some(a => (a.type === 'image' || a.type === 'pdf') && a.storageUrl);
+        if (!cancelled) setAllCached(hasMedia ? cached : null);
+      } catch {
+        if (!cancelled) setAllCached(null);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isGuest, user, currentSetlist.songIds, dlStatus]);
+
+  const handleDownloadSetlist = async () => {
+    if (!user || isGuest) return;
+
+    const allAttachments: Attachment[] = [];
+    for (const songId of currentSetlist.songIds) {
+      try {
+        const atts = await firestoreGetAttachments(user.uid, songId);
+        allAttachments.push(...atts);
+      } catch {
+        // skip songs we can't fetch
+      }
+    }
+    await downloadAttachments(allAttachments);
+  };
+
+  // Toast on download completion
+  const prevDlStatus = useRef(dlStatus);
+  useEffect(() => {
+    if (prevDlStatus.current === 'downloading' && dlStatus === 'done') {
+      toast('Downloaded for offline', 'success');
+    } else if (prevDlStatus.current === 'downloading' && dlStatus === 'error') {
+      toast(dlError || 'Download failed — check your connection');
+    }
+    prevDlStatus.current = dlStatus;
+  }, [dlStatus, dlError, toast]);
+
   return (
     <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
       {/* Header */}
@@ -215,21 +285,66 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
           <h1 className="text-xl font-bold text-[var(--foreground)]">{currentSetlist.name}</h1>
           <p className="text-sm text-[var(--muted)]">{setlistSongs.length} songs</p>
         </div>
-        {setlistSongs.length > 0 && onPlay && (
-          <button
-            onClick={() => handlePlayFromSong(0)}
-            className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
-          >
-            <svg
-              className="w-5 h-5 text-white"
-              fill="currentColor"
-              viewBox="0 0 24 24"
+        <div className="flex items-center gap-2">
+          {/* Download for offline */}
+          {!isGuest && allCached !== null && (
+            <button
+              onClick={allCached ? undefined : handleDownloadSetlist}
+              disabled={dlStatus === 'downloading'}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95 ${
+                allCached
+                  ? 'text-green-500'
+                  : dlStatus === 'downloading'
+                    ? 'text-[var(--accent)]'
+                    : 'text-[var(--muted)] hover:bg-[var(--card)]'
+              }`}
+              aria-label={allCached ? 'Downloaded for offline' : 'Download for offline'}
+              title={
+                dlStatus === 'downloading'
+                  ? `${dlProgress.done}/${dlProgress.total} files`
+                  : allCached
+                    ? 'Available offline'
+                    : 'Download for offline'
+              }
             >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            <span className="text-white font-semibold">Play</span>
-          </button>
-        )}
+              {dlStatus === 'downloading' ? (
+                <div className="relative">
+                  <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
+                    <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-mono whitespace-nowrap">
+                    {dlProgress.done}/{dlProgress.total}
+                  </span>
+                </div>
+              ) : allCached ? (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l2.25 2.25L15 11.25" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+              )}
+            </button>
+          )}
+          {setlistSongs.length > 0 && onPlay && (
+            <button
+              onClick={() => handlePlayFromSong(0)}
+              className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
+            >
+              <svg
+                className="w-5 h-5 text-white"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <span className="text-white font-semibold">Play</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Song List */}

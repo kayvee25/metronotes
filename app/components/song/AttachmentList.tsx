@@ -30,6 +30,8 @@ interface AttachmentListProps {
   onReorder: (orderedIds: string[]) => void;
   onAddText: () => void;
   onAddImage: () => void;
+  onAddPdf: () => void;
+  onAddDrawing: () => void;
 }
 
 function SortableCard({
@@ -83,6 +85,8 @@ export default function AttachmentList({
   onReorder,
   onAddText,
   onAddImage,
+  onAddPdf,
+  onAddDrawing,
 }: AttachmentListProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
 
@@ -147,6 +151,18 @@ export default function AttachmentList({
             >
               + Image
             </button>
+            <button
+              onClick={onAddPdf}
+              className="px-4 py-2 rounded-xl bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] font-semibold text-sm active:scale-95 transition-all"
+            >
+              + PDF
+            </button>
+            <button
+              onClick={onAddDrawing}
+              className="px-4 py-2 rounded-xl bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] font-semibold text-sm active:scale-95 transition-all"
+            >
+              + Drawing
+            </button>
           </div>
         </div>
       </div>
@@ -210,6 +226,25 @@ export default function AttachmentList({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               Image
+            </button>
+            <button
+              onClick={() => { onAddPdf(); setShowAddMenu(false); }}
+              className="w-full text-left px-4 py-2.5 text-sm text-[var(--foreground)] hover:bg-[var(--card)] flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
+                <text x="12" y="17" textAnchor="middle" fontSize="6" fontWeight="bold" fill="currentColor">PDF</text>
+              </svg>
+              PDF
+            </button>
+            <button
+              onClick={() => { onAddDrawing(); setShowAddMenu(false); }}
+              className="w-full text-left px-4 py-2.5 text-sm text-[var(--foreground)] hover:bg-[var(--card)] flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              Drawing
             </button>
           </div>
         )}

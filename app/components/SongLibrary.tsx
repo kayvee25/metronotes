@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useConfirm } from './ui/ConfirmModal';
 import { Song, SongInput } from '../types';
-import { useSongs } from '../hooks/useSongs';
 import { BPM, TIME_SIGNATURE, TIME_SIGNATURES } from '../lib/constants';
 import Modal from './ui/Modal';
 import {
@@ -15,6 +14,7 @@ import {
   Type,
 } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
+import SongDownloadIcon from './ui/SongDownloadIcon';
 
 type SongSortOption = 'name-az' | 'name-za' | 'bpm-low' | 'bpm-high' | 'recent-added' | 'recent-updated';
 
@@ -48,14 +48,18 @@ function sortSongs(songs: Song[], sort: SongSortOption): Song[] {
 }
 
 interface SongLibraryProps {
+  songs: Song[];
+  isLoading: boolean;
+  error: string | null;
+  deleteSong: (id: string) => boolean;
+  refresh: () => Promise<void>;
   onSelectSong?: (song: Song) => void;
   onEditSong?: (song: Song) => void;
   onCreateSong?: (input: SongInput) => Song;
   onQuickAddSong?: (song: Song) => void;
 }
 
-export default function SongLibrary({ onSelectSong, onEditSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
-  const { songs, isLoading, error, deleteSong, refresh } = useSongs();
+export default function SongLibrary({ songs, isLoading, error, deleteSong, refresh, onSelectSong, onEditSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SongSortOption>(() => {
     if (typeof window === 'undefined') return 'name-az';
@@ -297,6 +301,7 @@ export default function SongLibrary({ onSelectSong, onEditSong, onCreateSong, on
                       <p className="text-xs text-[var(--muted)] truncate mt-0.5">{song.artist}</p>
                     )}
                   </div>
+                  <SongDownloadIcon songId={song.id} />
                   {song.key && (
                     <span className="text-xs font-medium text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
                       {song.key}

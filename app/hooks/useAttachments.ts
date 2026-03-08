@@ -13,8 +13,9 @@ import {
   firestoreReorderAttachments,
 } from '../lib/firestore';
 import { deleteAttachmentFile } from '../lib/storage-firebase';
+import { removeCachedBlob, downloadAndCache } from '../lib/offline-cache';
 
-export function useAttachments(songId: string | null) {
+export function useAttachments(songId: string | null, onError?: (message: string) => void) {
   const { user, authState } = useAuth();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,7 +85,7 @@ export function useAttachments(songId: string | null) {
         setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
       }).catch(() => {
         setAttachments(prev => prev.filter(a => a.id !== tempId));
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
       });
     }
 
@@ -113,7 +114,7 @@ export function useAttachments(songId: string | null) {
         return attachment;
       } catch {
         setAttachments(prev => prev.filter(a => a.id !== tempId));
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
         throw new Error('Upload failed');
       }
     }
@@ -137,9 +138,14 @@ export function useAttachments(songId: string | null) {
 
     if (userId) {
       firestoreUpdateAttachment(userId, songId, attachmentId, update).catch(() => {
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
+    }
+
+    // Auto-update offline cache if storageUrl changed
+    if (update.storageUrl) {
+      downloadAndCache(attachmentId, update.storageUrl).catch(() => {});
     }
   }, [songId, isGuest, userId]);
 
@@ -178,20 +184,30 @@ export function useAttachments(songId: string | null) {
         deletePromise.then(() =>
           firestoreUpdateAttachment(userId, songId, remaining[0].id, { isDefault: true })
         ).catch(() => {
-          setError("Can't save — check your internet connection.");
+          onError?.("Can't save — check your internet connection.");
           firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
         });
       } else {
         deletePromise.catch(() => {
-          setError("Can't save — check your internet connection.");
+          onError?.("Can't save — check your internet connection.");
           firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
         });
       }
     }
+
+    // Remove from offline cache
+    removeCachedBlob(attachmentId).catch(() => {});
   }, [songId, attachments, isGuest, userId]);
 
   const deleteAllAttachments = useCallback(() => {
     if (!songId) return;
+
+    // Remove all cached blobs for this song's attachments
+    for (const a of attachments) {
+      if (a.storageUrl) {
+        removeCachedBlob(a.id).catch(() => {});
+      }
+    }
 
     if (isGuest) {
       storage.deleteAllAttachments(songId);
@@ -203,11 +219,11 @@ export function useAttachments(songId: string | null) {
 
     if (userId) {
       firestoreDeleteAllAttachments(userId, songId).catch(() => {
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }
-  }, [songId, isGuest, userId]);
+  }, [songId, attachments, isGuest, userId]);
 
   const reorderAttachments = useCallback((orderedIds: string[]) => {
     if (!songId) return;
@@ -233,7 +249,7 @@ export function useAttachments(songId: string | null) {
 
     if (userId) {
       firestoreReorderAttachments(userId, songId, orderedIds).catch(() => {
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }
@@ -268,7 +284,7 @@ export function useAttachments(songId: string | null) {
         firestoreUpdateAttachment(userId, songId, a.id, { isDefault: a.id === attachmentId })
       );
       Promise.all(updates).catch(() => {
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }

@@ -9,6 +9,7 @@ import AttachmentPage from './AttachmentPage';
 interface PerformanceModeProps {
   song?: Song | null;
   attachments: Attachment[];
+  attachmentsLoading?: boolean;
   musicalKey: string;
   bpm: number;
   timeSignature: string;
@@ -33,6 +34,7 @@ interface PerformanceModeProps {
 export default function PerformanceMode({
   song,
   attachments,
+  attachmentsLoading = false,
   musicalKey,
   bpm,
   timeSignature,
@@ -155,16 +157,46 @@ export default function PerformanceMode({
         <div className="text-sm text-[var(--muted)] mb-2 text-center">
           {metaLine}
         </div>
-        <div className="mb-4">
-          <PageDots
-            count={attachments.length}
-            current={currentPage}
-            onDotClick={navigateTo}
-          />
-        </div>
+        {!attachmentsLoading && attachments.length > 1 && (
+          <div className="mb-4 flex items-center justify-center gap-3">
+            <button
+              onClick={() => navigateTo(currentPage - 1)}
+              disabled={currentPage === 0}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-20 transition-colors"
+              aria-label="Previous attachment"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <PageDots
+              count={attachments.length}
+              current={currentPage}
+              onDotClick={navigateTo}
+            />
+            <button
+              onClick={() => navigateTo(currentPage + 1)}
+              disabled={currentPage === attachments.length - 1}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-20 transition-colors"
+              aria-label="Next attachment"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Paged content */}
-        {attachments.length > 0 && currentAttachment ? (
+        {attachmentsLoading ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <svg className="w-8 h-8 text-[var(--muted)] animate-spin mb-3" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
+              <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+            </svg>
+            <p className="text-sm text-[var(--muted)]">Loading attachments...</p>
+          </div>
+        ) : attachments.length > 0 && currentAttachment ? (
           <div
             className={`transition-opacity duration-150 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
           >
@@ -193,33 +225,6 @@ export default function PerformanceMode({
           </div>
         )}
 
-        {/* Edge arrows for multi-page */}
-        {attachments.length > 1 && (
-          <>
-            {currentPage > 0 && (
-              <button
-                onClick={() => navigateTo(currentPage - 1)}
-                className="fixed left-2 top-1/2 -translate-y-1/2 w-8 h-16 rounded-lg bg-[var(--background)]/60 flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-                aria-label="Previous page"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            {currentPage < attachments.length - 1 && (
-              <button
-                onClick={() => navigateTo(currentPage + 1)}
-                className="fixed right-2 top-1/2 -translate-y-1/2 w-8 h-16 rounded-lg bg-[var(--background)]/60 flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-                aria-label="Next page"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            )}
-          </>
-        )}
       </div>
 
       {/* Floating metronome pill */}

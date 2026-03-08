@@ -44,8 +44,12 @@ next-env.d.ts
 .claude/
 CLAUDE.md
 
-# specs
+# specs and plans
 spec*.md
+plan*.md
+REFACTOR.md
+ROADMAP.md
+FIREBASE_STORAGE_SETUP.md
 
 # PWA files (generated at build time)
 /public/sw.js

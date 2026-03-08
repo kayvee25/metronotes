@@ -81,5 +81,3 @@ The app is a client-side SPA built on Next.js. `App.tsx` is the root component t
 - **Offline:** IndexedDB cache for media blobs (images, PDFs); drawings and text are JSON and work offline without caching. Download status tracked per-song and per-setlist.
 - **Navigation:** Bottom nav bar with 3 tabs; song view opens on top with back navigation; Android back button supported
 - **Migration:** Plain-text notes auto-migrate to rich attachments on first load; guest data (including drawings) migrates to Firestore on sign-in
-
-See [CLAUDE.md](./CLAUDE.md) for detailed architectural documentation.

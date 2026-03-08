@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useConfirm } from '../ui/ConfirmModal';
 import Modal from '../ui/Modal';
 import { Attachment } from '../../types';
+import type { CloudProviderId } from '../../lib/cloud-providers/types';
+import { getAvailableProviders } from '../../lib/cloud-providers';
 import AttachmentCard from './AttachmentCard';
 import {
   DndContext,
@@ -33,6 +35,7 @@ interface AttachmentListProps {
   onAddImage: () => void;
   onAddPdf: () => void;
   onAddDrawing: () => void;
+  onAddFromCloud?: (providerId: CloudProviderId) => void;
 }
 
 function SortableCard({
@@ -88,6 +91,7 @@ export default function AttachmentList({
   onAddImage,
   onAddPdf,
   onAddDrawing,
+  onAddFromCloud,
 }: AttachmentListProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
 
@@ -167,6 +171,27 @@ export default function AttachmentList({
           <span className="text-sm font-medium text-[var(--foreground)]">Drawing</span>
         </button>
       </div>
+      {onAddFromCloud && (
+        <div className="mt-3 space-y-2">
+          {getAvailableProviders().map((provider) => (
+            <button
+              key={provider.id}
+              onClick={() => { onAddFromCloud(provider.id); setShowAddMenu(false); }}
+              className="w-full flex items-center justify-center gap-2.5 p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-[#4285F4] active:scale-95 transition-all"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H1.5c0 1.55.4 3.1 1.2 4.5l3.9 9.35z" fill="#0066DA"/>
+                <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.5 48.2c-.8 1.4-1.2 2.95-1.2 4.5h27.5L43.65 25z" fill="#00AC47"/>
+                <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8L53 65.3l-9.35 11.5h16.25c3.8 0 7.3-1.3 10.15-3.5z" fill="#EA4335"/>
+                <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.85 0H34.44c-1.65 0-3.2.4-4.55 1.2L43.65 25z" fill="#00832D"/>
+                <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.55 1.2h36.65c1.65 0 3.2-.4 4.55-1.2L59.8 53z" fill="#2684FC"/>
+                <path d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.15 28h27.5c0-1.55-.4-3.1-1.2-4.5L73.4 26.5z" fill="#FFBA00"/>
+              </svg>
+              <span className="text-sm font-medium text-[var(--foreground)]">From {provider.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 
@@ -190,7 +215,7 @@ export default function AttachmentList({
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
             />
           </svg>
-          <p className="text-[var(--muted)] mb-3">Add notes, images, or charts</p>
+          <p className="text-[var(--muted)] mb-3">Tap below to add sheet music, chord charts, lyrics, or reference images</p>
           <button
             onClick={() => setShowAddMenu(true)}
             className="px-5 py-2.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm active:scale-95 transition-all"

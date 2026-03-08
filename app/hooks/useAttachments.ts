@@ -26,6 +26,9 @@ export function useAttachments(songId: string | null, onError?: (message: string
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
+  // Track guest blob URLs so we can revoke them on cleanup
+  const guestBlobUrlsRef = useRef<string[]>([]);
+
   const isGuest = authState === 'guest';
   const userId = user?.uid;
 
@@ -39,6 +42,12 @@ export function useAttachments(songId: string | null, onError?: (message: string
 
     let cancelled = false;
 
+    // Revoke previous guest blob URLs to prevent memory leaks
+    for (const url of guestBlobUrlsRef.current) {
+      URL.revokeObjectURL(url);
+    }
+    guestBlobUrlsRef.current = [];
+
     async function load() {
       setIsLoading(true);
       setError(null);
@@ -46,18 +55,27 @@ export function useAttachments(songId: string | null, onError?: (message: string
         if (isGuest) {
           const localAttachments = storage.getAttachments(songId!);
           // Resolve blob URLs from IndexedDB for binary attachments
+          const blobUrls: string[] = [];
           const resolved = await Promise.all(
             localAttachments.map(async (att) => {
               if ((att.type === 'image' || att.type === 'pdf' || att.type === 'audio') && att.storageUrl) {
                 const blob = await getGuestBlob(songId!, att.id);
                 if (blob) {
-                  return { ...att, storageUrl: URL.createObjectURL(blob) };
+                  const url = URL.createObjectURL(blob);
+                  blobUrls.push(url);
+                  return { ...att, storageUrl: url };
                 }
               }
               return att;
             })
           );
-          if (!cancelled) setAttachments(resolved);
+          if (!cancelled) {
+            guestBlobUrlsRef.current = blobUrls;
+            setAttachments(resolved);
+          } else {
+            // Clean up if cancelled before we could set state
+            for (const url of blobUrls) URL.revokeObjectURL(url);
+          }
         } else if (userId) {
           const data = await firestoreGetAttachments(userId, songId!);
           if (!cancelled) setAttachments(data);
@@ -73,7 +91,14 @@ export function useAttachments(songId: string | null, onError?: (message: string
       load();
     }
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Revoke on unmount / song change
+      for (const url of guestBlobUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      guestBlobUrlsRef.current = [];
+    };
   }, [songId, isGuest, userId, authState]);
 
   const addRichText = useCallback((content?: object): Attachment => {

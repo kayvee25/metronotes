@@ -12,6 +12,7 @@ import AnnotationRenderer from './AnnotationRenderer';
 import ZoomableContainer from '../ui/ZoomableContainer';
 import { useCachedUrl } from '../../hooks/useCachedUrl';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { isCloudLinked } from '../../lib/cloud-providers/types';
 
 interface AttachmentPageProps {
   attachment: Attachment;
@@ -51,10 +52,14 @@ export default function AttachmentPage({
 }: AttachmentPageProps) {
   const isOnline = useOnlineStatus();
   const needsMedia = attachment.type === 'image' || attachment.type === 'pdf';
+  const cloudInfo = needsMedia && isCloudLinked(attachment)
+    ? { provider: attachment.cloudProvider!, fileId: attachment.cloudFileId! }
+    : undefined;
   const { url: resolvedUrl, loading: urlLoading } = useCachedUrl(
     needsMedia ? attachment.id : undefined,
     needsMedia ? attachment.storageUrl : undefined,
     isOnline,
+    cloudInfo,
   );
   const fontSizeClass = FONT_SIZE_MAP[perfFontSize] || FONT_SIZE_MAP.md;
   const fontFamilyClass = FONT_FAMILY_MAP[perfFontFamily] ?? FONT_FAMILY_MAP.mono;

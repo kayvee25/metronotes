@@ -19,6 +19,11 @@ import { STORAGE_KEYS } from './constants';
 import { getAllGuestBlobs, clearAllGuestBlobs } from './guest-blob-storage';
 import { uploadAttachmentFile, getStoragePath } from './storage-firebase';
 
+// Strip undefined values — Firestore rejects them in setDoc/updateDoc
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
 function songsCollection(userId: string) {
   return collection(db, 'users', userId, 'songs');
 }
@@ -43,7 +48,7 @@ export async function firestoreGetSong(userId: string, songId: string): Promise<
 export async function firestoreCreateSong(userId: string, input: SongInput): Promise<Song> {
   const id = generateId();
   const now = getTimestamp();
-  const data = { ...input, createdAt: now, updatedAt: now };
+  const data = stripUndefined({ ...input, createdAt: now, updatedAt: now });
   await setDoc(doc(db, 'users', userId, 'songs', id), data);
   return { ...data, id };
 }
@@ -52,7 +57,9 @@ export async function firestoreUpdateSong(userId: string, songId: string, update
   const ref = doc(db, 'users', userId, 'songs', songId);
   const snapshot = await getDoc(ref);
   if (!snapshot.exists()) return null;
-  const updatedData = { ...update, updatedAt: getTimestamp() };
+  // Strip undefined values — Firestore rejects them
+  const clean = stripUndefined(update);
+  const updatedData = { ...clean, updatedAt: getTimestamp() };
   await updateDoc(ref, updatedData);
   return { id: songId, ...snapshot.data(), ...updatedData } as Song;
 }
@@ -93,7 +100,7 @@ export async function firestoreGetSetlist(userId: string, setlistId: string): Pr
 export async function firestoreCreateSetlist(userId: string, input: SetlistInput): Promise<Setlist> {
   const id = generateId();
   const now = getTimestamp();
-  const data = { ...input, createdAt: now, updatedAt: now };
+  const data = stripUndefined({ ...input, createdAt: now, updatedAt: now });
   await setDoc(doc(db, 'users', userId, 'setlists', id), data);
   return { ...data, id };
 }
@@ -102,7 +109,8 @@ export async function firestoreUpdateSetlist(userId: string, setlistId: string, 
   const ref = doc(db, 'users', userId, 'setlists', setlistId);
   const snapshot = await getDoc(ref);
   if (!snapshot.exists()) return null;
-  const updatedData = { ...update, updatedAt: getTimestamp() };
+  const clean = stripUndefined(update);
+  const updatedData = { ...clean, updatedAt: getTimestamp() };
   await updateDoc(ref, updatedData);
   return { id: setlistId, ...snapshot.data(), ...updatedData } as Setlist;
 }
@@ -130,14 +138,15 @@ export async function firestoreGetAttachments(userId: string, songId: string): P
 export async function firestoreCreateAttachment(userId: string, songId: string, input: AttachmentInput): Promise<Attachment> {
   const id = generateId();
   const now = getTimestamp();
-  const data = { ...input, createdAt: now, updatedAt: now };
+  const data = stripUndefined({ ...input, createdAt: now, updatedAt: now });
   await setDoc(doc(db, 'users', userId, 'songs', songId, 'attachments', id), data);
   return { ...data, id };
 }
 
 export async function firestoreUpdateAttachment(userId: string, songId: string, attachmentId: string, update: AttachmentUpdate): Promise<void> {
   const ref = doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId);
-  await updateDoc(ref, { ...update, updatedAt: getTimestamp() });
+  const clean = stripUndefined(update);
+  await updateDoc(ref, { ...clean, updatedAt: getTimestamp() });
 }
 
 export async function firestoreDeleteAttachment(userId: string, songId: string, attachmentId: string): Promise<void> {

@@ -14,6 +14,7 @@ import {
 } from '../lib/firestore';
 import { deleteAttachmentFile } from '../lib/storage-firebase';
 import { removeCachedBlob, downloadAndCache } from '../lib/offline-cache';
+import { getGuestBlob, deleteGuestBlob } from '../lib/guest-blob-storage';
 
 export function useAttachments(songId: string | null, onError?: (message: string) => void) {
   const { user, authState } = useAuth();
@@ -43,7 +44,20 @@ export function useAttachments(songId: string | null, onError?: (message: string
       setError(null);
       try {
         if (isGuest) {
-          setAttachments(storage.getAttachments(songId!));
+          const localAttachments = storage.getAttachments(songId!);
+          // Resolve blob URLs from IndexedDB for binary attachments
+          const resolved = await Promise.all(
+            localAttachments.map(async (att) => {
+              if ((att.type === 'image' || att.type === 'pdf' || att.type === 'audio') && att.storageUrl) {
+                const blob = await getGuestBlob(songId!, att.id);
+                if (blob) {
+                  return { ...att, storageUrl: URL.createObjectURL(blob) };
+                }
+              }
+              return att;
+            })
+          );
+          if (!cancelled) setAttachments(resolved);
         } else if (userId) {
           const data = await firestoreGetAttachments(userId, songId!);
           if (!cancelled) setAttachments(data);
@@ -162,6 +176,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
 
     if (isGuest) {
       storage.deleteAttachment(songId, attachmentId);
+      deleteGuestBlob(songId, attachmentId); // Clean up IndexedDB blob
       if (needsNewDefault) {
         storage.updateAttachment(songId, remaining[0].id, { isDefault: true });
       }

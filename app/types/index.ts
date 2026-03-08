@@ -6,6 +6,8 @@ export interface Song {
   timeSignature: string;
   key?: string;
   notes?: string;
+  audioMode?: 'metronome' | 'backingtrack' | 'off';
+  countInBars?: number; // 1, 2, or 4
   createdAt: string;
   updatedAt: string;
 }
@@ -24,7 +26,7 @@ export type SongUpdate = Partial<SongInput>;
 export type SetlistInput = Omit<Setlist, 'id' | 'createdAt' | 'updatedAt'>;
 export type SetlistUpdate = Partial<SetlistInput>;
 
-export type AttachmentType = 'richtext' | 'image' | 'pdf' | 'drawing';
+export type AttachmentType = 'richtext' | 'image' | 'pdf' | 'drawing' | 'audio';
 
 export interface Stroke {
   id: string;
@@ -65,6 +67,9 @@ export interface Attachment {
 
   // pdf
   pageCount?: number;
+
+  // audio
+  duration?: number; // seconds
 
   // drawing
   drawingData?: DrawingData;

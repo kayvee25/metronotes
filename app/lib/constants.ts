@@ -58,6 +58,10 @@ export const AUDIO = {
     ACCENT: 800 * Math.pow(2, 7 / 12), // ~1346 Hz
     REGULAR: 600 * Math.pow(2, 7 / 12), // ~1009 Hz
   },
+  MAX_AUDIO_SIZE: 10 * 1024 * 1024, // 10MB per audio file
+  ACCEPTED_AUDIO_TYPES: ['audio/mpeg'] as readonly string[],
+  COUNT_IN_OPTIONS: [0, 1, 2, 4] as const,
+  DEFAULT_COUNT_IN_BARS: 1,
 } as const;
 
 // Animation durations (ms)
@@ -68,6 +72,10 @@ export const ANIMATION = {
   TOAST_EXIT_MS: 200,
   EDITOR_FOCUS_DELAY_MS: 100,
   PAGE_SETTLE_MS: 20,
+} as const;
+
+export const GUEST = {
+  MAX_SONGS: 3,
 } as const;
 
 // localStorage keys — single source of truth

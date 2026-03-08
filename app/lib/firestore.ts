@@ -16,6 +16,8 @@ import { db } from './firebase';
 import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
 import { generateId, getTimestamp } from './utils';
 import { STORAGE_KEYS } from './constants';
+import { getAllGuestBlobs, clearAllGuestBlobs } from './guest-blob-storage';
+import { uploadAttachmentFile, getStoragePath } from './storage-firebase';
 
 function songsCollection(userId: string) {
   return collection(db, 'users', userId, 'songs');
@@ -161,26 +163,44 @@ export async function firestoreReorderAttachments(userId: string, songId: string
 
 // Migration: upload localStorage data to Firestore
 
-export async function migrateLocalToFirestore(userId: string): Promise<void> {
+export async function migrateLocalToFirestore(
+  userId: string,
+  onProgress?: (current: number, total: number) => void,
+): Promise<void> {
   const songsData = localStorage.getItem(STORAGE_KEYS.SONGS);
   const setlistsData = localStorage.getItem(STORAGE_KEYS.SETLISTS);
 
   const localSongs: Song[] = songsData ? JSON.parse(songsData) : [];
   const localSetlists: Setlist[] = setlistsData ? JSON.parse(setlistsData) : [];
 
+  // Collect all guest blobs for upload
+  const guestBlobs = await getAllGuestBlobs();
+
+  // Count total items for progress
+  const totalAttachments = localSongs.reduce((sum, song) => {
+    const attData = localStorage.getItem(STORAGE_KEYS.attachments(song.id));
+    return sum + (attData ? JSON.parse(attData).length : 0);
+  }, 0);
+  const total = localSongs.length + localSetlists.length + totalAttachments + guestBlobs.length;
+  let current = 0;
+
   // Upload songs preserving IDs
   for (const song of localSongs) {
     const { id, ...data } = song;
     await setDoc(doc(db, 'users', userId, 'songs', id), data);
+    current++;
+    onProgress?.(current, total);
   }
 
   // Upload setlists preserving IDs
   for (const setlist of localSetlists) {
     const { id, ...data } = setlist;
     await setDoc(doc(db, 'users', userId, 'setlists', id), data);
+    current++;
+    onProgress?.(current, total);
   }
 
-  // Upload attachments for each song
+  // Upload attachments metadata for each song
   for (const song of localSongs) {
     const attKey = STORAGE_KEYS.attachments(song.id);
     const attData = localStorage.getItem(attKey);
@@ -189,12 +209,31 @@ export async function migrateLocalToFirestore(userId: string): Promise<void> {
       for (const att of attachments) {
         const { id, ...data } = att;
         await setDoc(doc(db, 'users', userId, 'songs', song.id, 'attachments', id), data);
+        current++;
+        onProgress?.(current, total);
       }
       localStorage.removeItem(attKey);
     }
   }
 
-  // Clear localStorage
+  // Upload guest blobs to Firebase Storage and update attachment docs
+  for (const { songId, attachmentId, blob } of guestBlobs) {
+    try {
+      const contentType = blob.type || 'application/octet-stream';
+      const downloadUrl = await uploadAttachmentFile(userId, songId, attachmentId, blob, contentType);
+      const storagePath = getStoragePath(userId, songId, attachmentId);
+      // Update the attachment doc with the storage URL
+      const attRef = doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId);
+      await updateDoc(attRef, { storageUrl: downloadUrl, storagePath });
+    } catch {
+      // Skip failed blob uploads — user can re-upload later
+    }
+    current++;
+    onProgress?.(current, total);
+  }
+
+  // Clear all local data
   localStorage.removeItem(STORAGE_KEYS.SONGS);
   localStorage.removeItem(STORAGE_KEYS.SETLISTS);
+  await clearAllGuestBlobs();
 }

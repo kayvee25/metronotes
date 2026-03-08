@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Song, Attachment } from '../../types';
+import BackingTrackSection from './BackingTrackSection';
 import { BPM } from '../../lib/constants';
 import KeySelector from '../KeySelector';
 import PlayFAB from '../ui/PlayFAB';
@@ -42,6 +43,39 @@ interface EditModeProps {
   onAddImageAttachment: () => void;
   onAddPdfAttachment: () => void;
   onAddDrawingAttachment: () => void;
+  // Backing track
+  audioAttachment: Attachment | null;
+  onAddAudio: () => void;
+  onDeleteAudio: (attachmentId: string) => void;
+  isUploadingAudio: boolean;
+  // Backing track playback
+  btIsPlaying?: boolean;
+  btCurrentTime?: number;
+  btDuration?: number;
+  btBuffered?: number;
+  onBtPlay?: () => void;
+  onBtPause?: () => void;
+  onBtSeek?: (time: number) => void;
+  // Audio mode (PlayFAB)
+  audioMode?: 'metronome' | 'backingtrack' | 'off';
+  onAudioModeChange?: (mode: 'metronome' | 'backingtrack' | 'off') => void;
+  hasBackingTrack?: boolean;
+  backingTrackControls?: {
+    isPlaying: boolean;
+    isCountingIn: boolean;
+    currentTime: number;
+    duration: number;
+    buffered: number;
+    volume: number;
+    onPlay: () => void;
+    onPause: () => void;
+    onStop: () => void;
+    onSeek: (time: number) => void;
+    onVolumeChange: (vol: number) => void;
+  };
+  countInBars?: number;
+  onCountInBarsChange?: (bars: number) => void;
+  isGuest?: boolean;
 }
 
 export default function EditMode({
@@ -77,6 +111,24 @@ export default function EditMode({
   onAddImageAttachment,
   onAddPdfAttachment,
   onAddDrawingAttachment,
+  audioAttachment,
+  onAddAudio,
+  onDeleteAudio,
+  isUploadingAudio,
+  btIsPlaying,
+  btCurrentTime,
+  btDuration,
+  btBuffered,
+  onBtPlay,
+  onBtPause,
+  onBtSeek,
+  audioMode,
+  onAudioModeChange,
+  hasBackingTrack,
+  backingTrackControls,
+  countInBars,
+  onCountInBarsChange,
+  isGuest = false,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -179,6 +231,13 @@ export default function EditMode({
         </button>
       </header>
 
+      {/* Guest mode banner */}
+      {isGuest && (
+        <div className="px-4 py-2 bg-[var(--accent)]/10 text-xs text-[var(--accent)] text-center font-medium">
+          Local only — sign in to sync across devices
+        </div>
+      )}
+
       {/* Controls section */}
       <div className="px-4 py-3 border-b border-[var(--border)]">
         <div className="grid grid-cols-3 gap-2">
@@ -254,19 +313,39 @@ export default function EditMode({
         </div>
       </div>
 
-      {/* Attachment list */}
-      <AttachmentList
-        attachments={attachments}
-        onEdit={onEditAttachment}
-        onDelete={onDeleteAttachment}
-        onToggleDefault={onToggleDefaultAttachment}
-        onNameChange={onRenameAttachment}
-        onReorder={onReorderAttachments}
-        onAddText={onAddTextAttachment}
-        onAddImage={onAddImageAttachment}
-        onAddPdf={onAddPdfAttachment}
-        onAddDrawing={onAddDrawingAttachment}
-      />
+      {/* Scrollable content area */}
+      <div className="flex-1 overflow-y-auto pb-20">
+        {/* Attachment list */}
+        <AttachmentList
+          attachments={attachments}
+          onEdit={onEditAttachment}
+          onDelete={onDeleteAttachment}
+          onToggleDefault={onToggleDefaultAttachment}
+          onNameChange={onRenameAttachment}
+          onReorder={onReorderAttachments}
+          onAddText={onAddTextAttachment}
+          onAddImage={onAddImageAttachment}
+          onAddPdf={onAddPdfAttachment}
+          onAddDrawing={onAddDrawingAttachment}
+        />
+
+        {/* Backing track */}
+        <BackingTrackSection
+          audioAttachment={audioAttachment}
+          onUpload={onAddAudio}
+          onDelete={onDeleteAudio}
+          isUploading={isUploadingAudio}
+          btIsPlaying={btIsPlaying}
+          btCurrentTime={btCurrentTime}
+          btDuration={btDuration}
+          btBuffered={btBuffered}
+          onBtPlay={onBtPlay}
+          onBtPause={onBtPause}
+          onBtSeek={onBtSeek}
+          countInBars={countInBars}
+          onCountInBarsChange={onCountInBarsChange}
+        />
+      </div>
 
       {/* Floating play FAB */}
       <PlayFAB
@@ -278,6 +357,11 @@ export default function EditMode({
         onTogglePlay={onTogglePlay}
         onBpmChange={onBpmChange}
         onToggleMute={onToggleMute}
+        audioMode={audioMode}
+        onAudioModeChange={onAudioModeChange}
+        hasBackingTrack={hasBackingTrack}
+        backingTrackControls={backingTrackControls}
+        countInBars={countInBars}
       />
     </div>
   );

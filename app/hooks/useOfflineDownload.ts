@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { Attachment } from '../types';
-import { downloadAndCache, areAttachmentsCached, getCachedAttachmentIds } from '../lib/offline-cache';
+import { downloadAndCacheAny, areAttachmentsCached, getCachedAttachmentIds } from '../lib/offline-cache';
+import { isCloudLinked } from '../lib/cloud-providers/types';
 
 export type DownloadStatus = 'idle' | 'checking' | 'downloading' | 'done' | 'error';
 
@@ -26,7 +27,7 @@ export function useOfflineDownload() {
 
   const downloadAttachments = useCallback(async (attachments: Attachment[]) => {
     const media = attachments.filter(
-      (a) => (a.type === 'image' || a.type === 'pdf') && a.storageUrl
+      (a) => (a.type === 'image' || a.type === 'pdf') && (a.storageUrl || isCloudLinked(a))
     );
 
     if (media.length === 0) {
@@ -50,16 +51,21 @@ export function useOfflineDownload() {
     setState({ status: 'downloading', progress: { done, total } });
 
     let quotaError = false;
+    let authError = false;
     for (const attachment of uncached) {
       if (abortRef.current) break;
       try {
-        const success = await downloadAndCache(attachment.id, attachment.storageUrl!);
+        const success = await downloadAndCacheAny(attachment);
         if (success) done++;
       } catch (err) {
-        // Storage quota exceeded — stop downloading
         if (err instanceof Error && err.message.includes('Storage full')) {
           quotaError = true;
           break;
+        }
+        if (err instanceof Error && err.message.includes('Not authorized')) {
+          authError = true;
+          // Skip cloud files that need auth, continue with others
+          continue;
         }
       }
       setState({ status: 'downloading', progress: { done, total } });
@@ -68,7 +74,11 @@ export function useOfflineDownload() {
     setState({
       status: done === total ? 'done' : 'error',
       progress: { done, total },
-      errorMessage: quotaError ? 'Storage full — try clearing the offline cache in Settings' : undefined,
+      errorMessage: quotaError
+        ? 'Storage full — try clearing the offline cache in Settings'
+        : authError
+          ? 'Some Drive files need re-authentication — open a Drive file first'
+          : undefined,
     });
   }, []);
 

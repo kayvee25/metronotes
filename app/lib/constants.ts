@@ -63,4 +63,22 @@ export const AUDIO = {
 // Animation durations (ms)
 export const ANIMATION = {
   BEAT_INDICATOR_MS: 100,
+  PAGE_TRANSITION_MS: 150,
+  TOAST_AUTO_DISMISS_MS: 4000,
+  TOAST_EXIT_MS: 200,
+  EDITOR_FOCUS_DELAY_MS: 100,
+  PAGE_SETTLE_MS: 20,
+} as const;
+
+// localStorage keys — single source of truth
+export const STORAGE_KEYS = {
+  SONGS: 'metronotes_songs',
+  SETLISTS: 'metronotes_setlists',
+  DARK_MODE: 'metronotes_dark_mode',
+  GUEST_MODE: 'metronotes_guest_mode',
+  PERF_FONT_SIZE: 'metronotes_perf_font_size',
+  PERF_FONT_FAMILY: 'metronotes_perf_font_family',
+  METRONOME_SOUND: 'metronotes_metronome_sound',
+  KEEP_SCREEN_ON: 'metronotes_keep_screen_on',
+  attachments: (songId: string) => `metronotes_attachments_${songId}`,
 } as const;

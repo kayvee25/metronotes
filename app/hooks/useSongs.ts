@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Song, SongInput, SongUpdate } from '../types';
 import { storage } from '../lib/storage';
 import { useAuth } from './useAuth';
@@ -17,6 +17,9 @@ export function useSongs(onError?: (message: string) => void) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   const isGuest = authState === 'guest';
   const userId = user?.uid;
@@ -80,7 +83,7 @@ export function useSongs(onError?: (message: string) => void) {
         setSongs(prev => prev.map(s => s.id === tempId ? song : s));
       }).catch(() => {
         setSongs(prev => prev.filter(s => s.id !== tempId));
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
       });
     }
     return tempSong;
@@ -105,7 +108,7 @@ export function useSongs(onError?: (message: string) => void) {
 
     if (userId) {
       firestoreUpdateSong(userId, id, update).catch(() => {
-        onError?.("Can't save — check your internet connection.");
+        onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetSongs(userId).then(setSongs).catch(() => {});
       });
     }
@@ -128,7 +131,7 @@ export function useSongs(onError?: (message: string) => void) {
       firestoreDeleteAllAttachments(userId, id)
         .then(() => firestoreDeleteSong(userId, id))
         .catch(() => {
-          onError?.("Can't delete — check your internet connection.");
+          onErrorRef.current?.("Can't delete — check your internet connection.");
           firestoreGetSongs(userId).then(setSongs).catch(() => {});
         });
     }

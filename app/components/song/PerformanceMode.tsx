@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { Song, Setlist, Attachment } from '../../types';
+import { ANIMATION } from '../../lib/constants';
 import MetronomePill from '../ui/MetronomePill';
 import PageDots from '../ui/PageDots';
 import AttachmentPage from './AttachmentPage';
@@ -75,8 +76,8 @@ export default function PerformanceMode({
     setIsTransitioning(true);
     setTimeout(() => {
       setCurrentPage(index);
-      setTimeout(() => setIsTransitioning(false), 20);
-    }, 150);
+      setTimeout(() => setIsTransitioning(false), ANIMATION.PAGE_SETTLE_MS);
+    }, ANIMATION.PAGE_TRANSITION_MS);
   }, [currentPage, attachments.length]);
 
   // Build metadata line

@@ -14,7 +14,9 @@ import { useAuthProvider, AuthContext } from '../hooks/useAuth';
 import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { migrateLocalToFirestore } from '../lib/firestore';
+import { STORAGE_KEYS } from '../lib/constants';
 import { ConfirmProvider } from './ui/ConfirmModal';
+import Modal from './ui/Modal';
 import { ToastProvider, useToast } from './ui/Toast';
 import OfflineBanner from './ui/OfflineBanner';
 
@@ -23,7 +25,7 @@ type PendingNav = { type: 'tab'; tab: Tab } | { type: 'back' } | null;
 
 function getInitialDarkMode(): boolean {
   if (typeof window === 'undefined') return false;
-  const saved = localStorage.getItem('metronotes_dark_mode');
+  const saved = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
   if (saved !== null) return saved === 'true';
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
@@ -54,7 +56,7 @@ function AppInner() {
   // Sync dark mode to DOM and localStorage
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
-    localStorage.setItem('metronotes_dark_mode', String(isDarkMode));
+    localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(isDarkMode));
   }, [isDarkMode]);
 
   // Android back button / browser back: popstate triggers back navigation from song view
@@ -321,38 +323,25 @@ function AppInner() {
       )}
 
       {/* Unsaved changes dialog */}
-      {pendingNavigation && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
-          onClick={() => setPendingNavigation(null)}
-        >
-          <div
-            className="bg-[var(--background)] rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-[var(--border)]"
-            onClick={(e) => e.stopPropagation()}
+      <Modal isOpen={!!pendingNavigation} onClose={() => setPendingNavigation(null)} title="Unsaved Changes">
+        <p className="text-[var(--muted)] text-center mb-6 -mt-2">
+          You have unsaved changes. Discard?
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={handleDiscardChanges}
+            className="flex-1 h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
           >
-            <h2 className="text-xl font-bold text-[var(--foreground)] text-center mb-2">
-              Unsaved Changes
-            </h2>
-            <p className="text-[var(--muted)] text-center mb-6">
-              You have unsaved changes. Discard?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDiscardChanges}
-                className="flex-1 h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
-              >
-                Discard
-              </button>
-              <button
-                onClick={handleSaveAndNavigate}
-                className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
-              >
-                Save
-              </button>
-            </div>
-          </div>
+            Discard
+          </button>
+          <button
+            onClick={handleSaveAndNavigate}
+            className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
+          >
+            Save
+          </button>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
@@ -368,10 +357,8 @@ export default function App() {
     migrationStarted.current = true;
 
     const runMigration = async () => {
-      const SONGS_KEY = 'metronotes_songs';
-      const SETLISTS_KEY = 'metronotes_setlists';
-      const songsData = localStorage.getItem(SONGS_KEY);
-      const setlistsData = localStorage.getItem(SETLISTS_KEY);
+        const songsData = localStorage.getItem(STORAGE_KEYS.SONGS);
+      const setlistsData = localStorage.getItem(STORAGE_KEYS.SETLISTS);
 
       const hasLocalData =
         (songsData && JSON.parse(songsData).length > 0) ||

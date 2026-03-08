@@ -13,6 +13,7 @@ import {
   GoogleAuthProvider,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { STORAGE_KEYS } from '../lib/constants';
 
 export type AuthState = 'loading' | 'unauthenticated' | 'unverified' | 'authenticated' | 'guest';
 
@@ -43,7 +44,7 @@ export function useAuthProvider(): AuthContextValue {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    const isGuest = localStorage.getItem('metronotes_guest_mode') === 'true';
+    const isGuest = localStorage.getItem(STORAGE_KEYS.GUEST_MODE) === 'true';
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
@@ -71,7 +72,7 @@ export function useAuthProvider(): AuthContextValue {
     setAuthError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-      localStorage.removeItem('metronotes_guest_mode');
+      localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
     } catch (error: unknown) {
       const e = error as { code?: string; message?: string };
       if (e.code === 'auth/popup-blocked') {
@@ -88,7 +89,7 @@ export function useAuthProvider(): AuthContextValue {
     setAuthError(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      localStorage.removeItem('metronotes_guest_mode');
+      localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
     } catch (error: unknown) {
       const e = error as { code?: string; message?: string };
       if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
@@ -106,7 +107,7 @@ export function useAuthProvider(): AuthContextValue {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(result.user);
-      localStorage.removeItem('metronotes_guest_mode');
+      localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
     } catch (error: unknown) {
       const e = error as { code?: string; message?: string };
       if (e.code === 'auth/email-already-in-use') {
@@ -155,7 +156,7 @@ export function useAuthProvider(): AuthContextValue {
     setAuthError(null);
     try {
       await firebaseSignOut(auth);
-      localStorage.removeItem('metronotes_guest_mode');
+      localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
       setAuthState('unauthenticated');
     } catch (error: unknown) {
       const e = error as { message?: string };
@@ -164,12 +165,12 @@ export function useAuthProvider(): AuthContextValue {
   }, []);
 
   const continueAsGuest = useCallback(() => {
-    localStorage.setItem('metronotes_guest_mode', 'true');
+    localStorage.setItem(STORAGE_KEYS.GUEST_MODE, 'true');
     setAuthState('guest');
   }, []);
 
   const exitGuestMode = useCallback(() => {
-    localStorage.removeItem('metronotes_guest_mode');
+    localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
     setAuthState('unauthenticated');
   }, []);
 

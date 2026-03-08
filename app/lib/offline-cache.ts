@@ -13,7 +13,8 @@ export async function getCachedBlob(attachmentId: string): Promise<Blob | null> 
   try {
     const blob = await get<Blob>(key(attachmentId), store);
     return blob ?? null;
-  } catch {
+  } catch (err) {
+    console.warn('[offline-cache] getCachedBlob failed:', err);
     return null;
   }
 }
@@ -42,7 +43,8 @@ export async function getCacheSize(): Promise<number> {
   try {
     const allEntries = await entries<string, Blob>(store);
     return allEntries.reduce((total, [, blob]) => total + (blob?.size ?? 0), 0);
-  } catch {
+  } catch (err) {
+    console.warn('[offline-cache] getCacheSize failed:', err);
     return 0;
   }
 }
@@ -51,7 +53,8 @@ export async function isCached(attachmentId: string): Promise<boolean> {
   try {
     const blob = await get<Blob>(key(attachmentId), store);
     return blob != null;
-  } catch {
+  } catch (err) {
+    console.warn('[offline-cache] isCached failed:', err);
     return false;
   }
 }
@@ -66,7 +69,8 @@ export async function getCachedAttachmentIds(): Promise<Set<string>> {
       }
     }
     return ids;
-  } catch {
+  } catch (err) {
+    console.warn('[offline-cache] getCachedAttachmentIds failed:', err);
     return new Set();
   }
 }

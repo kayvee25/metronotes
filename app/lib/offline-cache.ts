@@ -111,8 +111,7 @@ export async function downloadAndCacheCloud(
 
   // Dynamic import to avoid circular dependency
   const { fetchCloudBlob } = await import('./cloud-providers/fetch-cloud-blob');
-  const blob = await fetchCloudBlob(cloudProvider, cloudFileId, attachmentId);
-  // fetchCloudBlob already caches, but let's ensure
+  await fetchCloudBlob(cloudProvider, cloudFileId, attachmentId);
   return true;
 }
 

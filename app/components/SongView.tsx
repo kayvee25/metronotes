@@ -16,6 +16,9 @@ import { loadPdfJs } from '../lib/pdf-loader';
 import { preloadAudio } from '../lib/offline-cache';
 import { firestoreGetAttachments } from '../lib/firestore';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
+import { useCloudProvider } from '../hooks/useCloudProvider';
+import { cloudMimeToAttachmentType } from '../lib/cloud-providers/types';
+import type { CloudProviderId } from '../lib/cloud-providers/types';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
 import TimeSignatureModal from './song/TimeSignatureModal';
@@ -26,6 +29,13 @@ import AnnotationOverlay from './song/AnnotationOverlay';
 import PdfAnnotationOverlay from './song/PdfAnnotationOverlay';
 
 type Mode = 'performance' | 'edit';
+
+/** Strip file extension to derive a clean display name */
+function nameFromFile(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(0, dot) : fileName;
+}
+
 
 export interface SongViewHandle {
   save: () => void;
@@ -353,11 +363,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   }, [isNewDrawing, editingDrawing, addImage, attachments.length, updateAttachment]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddImage = useCallback(() => {
     fileInputRef.current?.click();
+  }, []);
+
+  const handleAddCamera = useCallback(() => {
+    cameraInputRef.current?.click();
   }, []);
 
   const handleAddPdf = useCallback(() => {
@@ -383,6 +398,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       const { blob, width, height } = await compressImage(file);
       const attachment = await addImage({
         type: 'image',
+        name: nameFromFile(file.name),
         order: attachments.length,
         isDefault: attachments.length === 0,
         fileName: file.name,
@@ -446,6 +462,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
 
       const attachment = await addImage({
         type: 'pdf',
+        name: nameFromFile(file.name),
         order: attachments.length,
         isDefault: attachments.length === 0,
         fileName: file.name,
@@ -499,6 +516,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
 
       const attachment = await addImage({
         type: 'audio',
+        name: nameFromFile(file.name),
         order: attachments.length,
         isDefault: false,
         fileName: file.name,
@@ -521,6 +539,74 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       setIsUploading(false);
     }
   }, [songId, userId, isGuest, attachments, addImage, updateAttachment, toast]);
+
+  // Cloud Drive import
+  const { openPicker, isAvailable: cloudAvailable } = useCloudProvider('google-drive');
+
+  const handleAddFromCloud = useCallback(async (_providerId: CloudProviderId) => {
+    if (isGuest) {
+      toast('Sign in with Google to import from Drive');
+      return;
+    }
+    if (!songId) return;
+    if (!isGuest && !userId) return;
+
+    const result = await openPicker([
+      'image/jpeg', 'image/png', 'image/webp',
+      'application/pdf',
+    ]);
+    if (!result) return;
+
+    const attachmentType = cloudMimeToAttachmentType(result.mimeType);
+    if (!attachmentType) {
+      toast('Unsupported file type');
+      return;
+    }
+
+    await addImage({
+      type: attachmentType,
+      name: nameFromFile(result.fileName),
+      order: attachments.length,
+      isDefault: attachmentType !== 'audio' && attachments.length === 0,
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      cloudProvider: result.providerId,
+      cloudFileId: result.fileId,
+      cloudFileName: result.fileName,
+      cloudMimeType: result.mimeType,
+      cloudFileSize: result.fileSize,
+      cloudWebViewLink: result.webViewLink,
+      cloudThumbnailLink: result.thumbnailLink,
+    });
+  }, [isGuest, songId, userId, openPicker, attachments.length, addImage, toast]);
+
+  const handleAddAudioFromCloud = useCallback(async (_providerId: CloudProviderId) => {
+    if (isGuest) {
+      toast('Sign in with Google to import from Drive');
+      return;
+    }
+    if (!songId) return;
+    if (!isGuest && !userId) return;
+
+    const result = await openPicker(['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/webm']);
+    if (!result) return;
+
+    await addImage({
+      type: 'audio',
+      name: nameFromFile(result.fileName),
+      order: attachments.length,
+      isDefault: false,
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      cloudProvider: result.providerId,
+      cloudFileId: result.fileId,
+      cloudFileName: result.fileName,
+      cloudMimeType: result.mimeType,
+      cloudFileSize: result.fileSize,
+      cloudWebViewLink: result.webViewLink,
+      cloudThumbnailLink: result.thumbnailLink,
+    });
+  }, [isGuest, songId, userId, openPicker, attachments.length, addImage, toast]);
 
   // Handle audio mode changes — stop any active playback
   const handleAudioModeChange = useCallback((newMode: AudioMode) => {
@@ -622,6 +708,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onReorderAttachments={reorderAttachments}
           onAddTextAttachment={handleAddText}
           onAddImageAttachment={handleAddImage}
+          onAddCameraAttachment={handleAddCamera}
           onAddPdfAttachment={handleAddPdf}
           onAddDrawingAttachment={handleAddDrawing}
           audioAttachment={audioAttachment}
@@ -642,6 +729,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           countInBars={countInBars}
           onCountInBarsChange={setCountInBars}
           isGuest={isGuest}
+          onAddFromCloud={cloudAvailable ? handleAddFromCloud : undefined}
+          onAddAudioFromCloud={cloudAvailable ? handleAddAudioFromCloud : undefined}
         />
       )}
 
@@ -711,6 +800,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* Hidden file input for camera capture */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         className="hidden"
         onChange={handleFileSelected}
       />

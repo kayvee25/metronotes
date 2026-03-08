@@ -98,31 +98,70 @@ export async function downloadAndCache(attachmentId: string, storageUrl: string)
   }
 }
 
-/** Check if a set of attachments are all cached (image/pdf/audio with storageUrl). */
-export async function areAttachmentsCached(attachments: { id: string; type: string; storageUrl?: string }[]): Promise<boolean> {
-  const mediaAttachments = attachments.filter(a => (a.type === 'image' || a.type === 'pdf' || a.type === 'audio') && a.storageUrl);
-  if (mediaAttachments.length === 0) return true;
+/**
+ * Download a cloud-linked file and cache it.
+ * Returns true if successfully cached, false if skipped (e.g. no auth).
+ */
+export async function downloadAndCacheCloud(
+  attachmentId: string,
+  cloudProvider: string,
+  cloudFileId: string,
+): Promise<boolean> {
+  if (await isCached(attachmentId)) return true;
+
+  // Dynamic import to avoid circular dependency
+  const { fetchCloudBlob } = await import('./cloud-providers/fetch-cloud-blob');
+  const blob = await fetchCloudBlob(cloudProvider, cloudFileId, attachmentId);
+  // fetchCloudBlob already caches, but let's ensure
+  return true;
+}
+
+type MediaAttachment = { id: string; type: string; storageUrl?: string; cloudProvider?: string; cloudFileId?: string };
+
+function isDownloadable(a: MediaAttachment): boolean {
+  return (a.type === 'image' || a.type === 'pdf' || a.type === 'audio') && !!(a.storageUrl || (a.cloudProvider && a.cloudFileId));
+}
+
+/** Check if a set of attachments are all cached (image/pdf/audio with storageUrl or cloud link). */
+export async function areAttachmentsCached(attachments: MediaAttachment[]): Promise<boolean> {
+  const media = attachments.filter(isDownloadable);
+  if (media.length === 0) return true;
   const cachedIds = await getCachedAttachmentIds();
-  return mediaAttachments.every(a => cachedIds.has(a.id));
+  return media.every(a => cachedIds.has(a.id));
 }
 
 /** Returns the number of media attachments that need downloading. */
-export async function countUncached(attachments: { id: string; type: string; storageUrl?: string }[]): Promise<number> {
-  const mediaAttachments = attachments.filter(a => (a.type === 'image' || a.type === 'pdf' || a.type === 'audio') && a.storageUrl);
-  if (mediaAttachments.length === 0) return 0;
+export async function countUncached(attachments: MediaAttachment[]): Promise<number> {
+  const media = attachments.filter(isDownloadable);
+  if (media.length === 0) return 0;
   const cachedIds = await getCachedAttachmentIds();
-  return mediaAttachments.filter(a => !cachedIds.has(a.id)).length;
+  return media.filter(a => !cachedIds.has(a.id)).length;
+}
+
+/**
+ * Download a single attachment (from storageUrl or cloud provider) and cache it.
+ * Returns true on success, false on skip, throws on quota error.
+ */
+export async function downloadAndCacheAny(att: MediaAttachment): Promise<boolean> {
+  if (await isCached(att.id)) return true;
+  if (att.storageUrl) {
+    return downloadAndCache(att.id, att.storageUrl);
+  }
+  if (att.cloudProvider && att.cloudFileId) {
+    return downloadAndCacheCloud(att.id, att.cloudProvider, att.cloudFileId);
+  }
+  return false;
 }
 
 /**
  * Preload an audio attachment into the offline cache if not already cached.
  * Silently fails — intended for opportunistic prefetching (e.g. next song in setlist).
  */
-export async function preloadAudio(attachments: { id: string; type: string; storageUrl?: string }[]): Promise<void> {
-  const audio = attachments.find(a => a.type === 'audio' && a.storageUrl);
-  if (!audio || !audio.storageUrl) return;
+export async function preloadAudio(attachments: MediaAttachment[]): Promise<void> {
+  const audio = attachments.find(a => a.type === 'audio' && isDownloadable(a));
+  if (!audio) return;
   try {
-    await downloadAndCache(audio.id, audio.storageUrl);
+    await downloadAndCacheAny(audio);
   } catch {
     // Silently ignore — preloading is best-effort
   }

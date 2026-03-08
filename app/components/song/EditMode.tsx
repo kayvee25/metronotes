@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Song, Attachment } from '../../types';
+import type { CloudProviderId } from '../../lib/cloud-providers/types';
 import BackingTrackSection from './BackingTrackSection';
 import { BPM } from '../../lib/constants';
 import KeySelector from '../KeySelector';
@@ -41,6 +42,7 @@ interface EditModeProps {
   onReorderAttachments: (orderedIds: string[]) => void;
   onAddTextAttachment: () => void;
   onAddImageAttachment: () => void;
+  onAddCameraAttachment: () => void;
   onAddPdfAttachment: () => void;
   onAddDrawingAttachment: () => void;
   // Backing track
@@ -76,6 +78,8 @@ interface EditModeProps {
   countInBars?: number;
   onCountInBarsChange?: (bars: number) => void;
   isGuest?: boolean;
+  onAddFromCloud?: (providerId: CloudProviderId) => void;
+  onAddAudioFromCloud?: (providerId: CloudProviderId) => void;
 }
 
 export default function EditMode({
@@ -109,6 +113,7 @@ export default function EditMode({
   onReorderAttachments,
   onAddTextAttachment,
   onAddImageAttachment,
+  onAddCameraAttachment,
   onAddPdfAttachment,
   onAddDrawingAttachment,
   audioAttachment,
@@ -129,6 +134,8 @@ export default function EditMode({
   countInBars,
   onCountInBarsChange,
   isGuest = false,
+  onAddFromCloud,
+  onAddAudioFromCloud,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -332,14 +339,17 @@ export default function EditMode({
           onReorder={onReorderAttachments}
           onAddText={onAddTextAttachment}
           onAddImage={onAddImageAttachment}
+          onAddCamera={onAddCameraAttachment}
           onAddPdf={onAddPdfAttachment}
           onAddDrawing={onAddDrawingAttachment}
+          onAddFromCloud={onAddFromCloud}
         />
 
         {/* Backing track */}
         <BackingTrackSection
           audioAttachment={audioAttachment}
           onUpload={onAddAudio}
+          onAddFromCloud={onAddAudioFromCloud}
           onDelete={onDeleteAudio}
           isUploading={isUploadingAudio}
           btIsPlaying={btIsPlaying}

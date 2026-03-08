@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Attachment } from '../types';
 import { getCachedBlob } from '../lib/offline-cache';
+import { fetchCloudBlob } from '../lib/cloud-providers/fetch-cloud-blob';
+import { isCloudLinked } from '../lib/cloud-providers/types';
 import { scheduleClick, type MetronomeSound } from '../lib/audio-clicks';
 import { AUDIO, ANIMATION } from '../lib/constants';
 
@@ -108,9 +110,25 @@ export function useBackingTrack({
       // Fall back to storage URL
       if (track.storageUrl) {
         setAudioUrl(track.storageUrl);
-      } else {
-        setAudioUrl(null);
+        return;
       }
+
+      // Try fetching from cloud provider
+      if (isCloudLinked(track)) {
+        try {
+          const blob = await fetchCloudBlob(track.cloudProvider!, track.cloudFileId!, track.id);
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          blobUrlRef.current = url;
+          setAudioUrl(url);
+        } catch {
+          // Silent auth not available — user needs to interact with Drive first
+          if (!cancelled) setAudioUrl(null);
+        }
+        return;
+      }
+
+      setAudioUrl(null);
     };
 
     resolveUrl();
@@ -119,7 +137,7 @@ export function useBackingTrack({
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-resolve when track identity or URL changes
-  }, [track?.id, track?.storageUrl]);
+  }, [track?.id, track?.storageUrl, track?.cloudFileId]);
 
   // Set audio source when URL changes
   useEffect(() => {

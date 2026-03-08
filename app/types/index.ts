@@ -80,6 +80,15 @@ export interface Attachment {
   // annotations (on PDF attachments, per page)
   pageAnnotations?: Record<number, AnnotationLayer>;
 
+  // cloud-linked file (Google Drive, Dropbox, etc.)
+  cloudProvider?: string;
+  cloudFileId?: string;
+  cloudFileName?: string;
+  cloudMimeType?: string;
+  cloudFileSize?: number;
+  cloudWebViewLink?: string;
+  cloudThumbnailLink?: string;
+
   // Reserved for future collaboration
   userId?: string;
 

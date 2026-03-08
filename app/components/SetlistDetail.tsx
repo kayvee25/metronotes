@@ -226,7 +226,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
         }
         if (cancelled) return;
         const cached = await areAttachmentsCached(allAttachments);
-        const hasMedia = allAttachments.some(a => (a.type === 'image' || a.type === 'pdf') && a.storageUrl);
+        const hasMedia = allAttachments.some(a => (a.type === 'image' || a.type === 'pdf') && (a.storageUrl || (a.cloudProvider && a.cloudFileId)));
         if (!cancelled) setAllCached(hasMedia ? cached : null);
       } catch {
         if (!cancelled) setAllCached(null);

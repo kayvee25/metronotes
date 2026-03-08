@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { Attachment } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { firestoreGetAttachments } from '../../lib/firestore';
-import { areAttachmentsCached, downloadAndCache, getCachedAttachmentIds } from '../../lib/offline-cache';
+import { areAttachmentsCached, downloadAndCacheAny, getCachedAttachmentIds } from '../../lib/offline-cache';
+import { isCloudLinked } from '../../lib/cloud-providers/types';
 import { useToast } from './Toast';
 
 interface SongDownloadIconProps {
@@ -37,7 +38,7 @@ export default function SongDownloadIcon({ songId, attachments: prefetched }: So
         if (cancelled) return;
         setAttachments(atts);
 
-        const media = atts.filter(a => (a.type === 'image' || a.type === 'pdf') && a.storageUrl);
+        const media = atts.filter(a => (a.type === 'image' || a.type === 'pdf') && (a.storageUrl || isCloudLinked(a)));
         if (media.length === 0) { setStatus('hidden'); return; }
 
         const cached = await areAttachmentsCached(media);
@@ -56,7 +57,7 @@ export default function SongDownloadIcon({ songId, attachments: prefetched }: So
     e.stopPropagation();
     if (status === 'downloading' || status === 'cached' || !attachments) return;
 
-    const media = attachments.filter(a => (a.type === 'image' || a.type === 'pdf') && a.storageUrl);
+    const media = attachments.filter(a => (a.type === 'image' || a.type === 'pdf') && (a.storageUrl || isCloudLinked(a)));
     const cachedIds = await getCachedAttachmentIds();
     const uncached = media.filter(a => !cachedIds.has(a.id));
 
@@ -68,14 +69,19 @@ export default function SongDownloadIcon({ songId, attachments: prefetched }: So
     setProgress({ done, total });
 
     let quotaError = false;
+    let authError = false;
     for (const att of uncached) {
       try {
-        const ok = await downloadAndCache(att.id, att.storageUrl!);
+        const ok = await downloadAndCacheAny(att);
         if (ok) done++;
       } catch (err) {
         if (err instanceof Error && err.message.includes('Storage full')) {
           quotaError = true;
           break;
+        }
+        if (err instanceof Error && err.message.includes('Not authorized')) {
+          authError = true;
+          continue;
         }
       }
       setProgress({ done, total });
@@ -86,7 +92,11 @@ export default function SongDownloadIcon({ songId, attachments: prefetched }: So
       toast('Downloaded for offline', 'success');
     } else {
       setStatus('not-cached');
-      toast(quotaError ? 'Storage full — try clearing the offline cache in Settings' : 'Download failed — check your connection');
+      toast(
+        quotaError ? 'Storage full — try clearing the offline cache in Settings'
+          : authError ? 'Some Drive files need re-authentication'
+          : 'Download failed — check your connection'
+      );
     }
   };
 

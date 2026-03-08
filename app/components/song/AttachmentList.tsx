@@ -118,6 +118,58 @@ export default function AttachmentList({
     if (ok) onDelete(attachmentId);
   };
 
+  const addMenuModal = (
+    <Modal isOpen={showAddMenu} onClose={() => setShowAddMenu(false)} title="Add Attachment">
+      <div className="grid grid-cols-2 gap-3 -mt-2">
+        <button
+          onClick={() => { onAddText(); setShowAddMenu(false); }}
+          className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-blue-400 active:scale-95 transition-all"
+        >
+          <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+            <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h12" />
+            </svg>
+          </div>
+          <span className="text-sm font-medium text-[var(--foreground)]">Text</span>
+        </button>
+        <button
+          onClick={() => { onAddImage(); setShowAddMenu(false); }}
+          className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-emerald-400 active:scale-95 transition-all"
+        >
+          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <span className="text-sm font-medium text-[var(--foreground)]">Image</span>
+        </button>
+        <button
+          onClick={() => { onAddPdf(); setShowAddMenu(false); }}
+          className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-red-400 active:scale-95 transition-all"
+        >
+          <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17h6m-6-4h6" />
+            </svg>
+          </div>
+          <span className="text-sm font-medium text-[var(--foreground)]">PDF</span>
+        </button>
+        <button
+          onClick={() => { onAddDrawing(); setShowAddMenu(false); }}
+          className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--accent)] active:scale-95 transition-all"
+        >
+          <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
+            <svg className="w-5 h-5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </div>
+          <span className="text-sm font-medium text-[var(--foreground)]">Drawing</span>
+        </button>
+      </div>
+    </Modal>
+  );
+
   if (attachments.length === 0) {
     return (
       <div className="p-4">
@@ -146,6 +198,7 @@ export default function AttachmentList({
             + Add Attachment
           </button>
         </div>
+        {addMenuModal}
       </div>
     );
   }
@@ -190,56 +243,7 @@ export default function AttachmentList({
         </button>
       </div>
 
-      {/* Add attachment modal */}
-      <Modal isOpen={showAddMenu} onClose={() => setShowAddMenu(false)} title="Add Attachment">
-        <div className="grid grid-cols-2 gap-3 -mt-2">
-          <button
-            onClick={() => { onAddText(); setShowAddMenu(false); }}
-            className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-blue-400 active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h12" />
-              </svg>
-            </div>
-            <span className="text-sm font-medium text-[var(--foreground)]">Text</span>
-          </button>
-          <button
-            onClick={() => { onAddImage(); setShowAddMenu(false); }}
-            className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-emerald-400 active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <span className="text-sm font-medium text-[var(--foreground)]">Image</span>
-          </button>
-          <button
-            onClick={() => { onAddPdf(); setShowAddMenu(false); }}
-            className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-red-400 active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17h6m-6-4h6" />
-              </svg>
-            </div>
-            <span className="text-sm font-medium text-[var(--foreground)]">PDF</span>
-          </button>
-          <button
-            onClick={() => { onAddDrawing(); setShowAddMenu(false); }}
-            className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--accent)] active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            </div>
-            <span className="text-sm font-medium text-[var(--foreground)]">Drawing</span>
-          </button>
-        </div>
-      </Modal>
+      {addMenuModal}
     </div>
   );
 }

@@ -178,13 +178,20 @@ export default function EditMode({
 
         <div className="flex-1 min-w-0">
           {song ? (
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="Song name"
-              className="w-full text-lg font-bold bg-transparent text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none"
-            />
+            <div className="overflow-x-auto no-scrollbar">
+              <div className="relative min-w-full w-fit">
+                <span className="invisible whitespace-pre text-lg font-bold block" aria-hidden="true">
+                  {name || 'Song name'}{'\u00A0'}
+                </span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => onNameChange(e.target.value)}
+                  placeholder="Song name"
+                  className="absolute inset-0 w-full text-lg font-bold bg-transparent text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none"
+                />
+              </div>
+            </div>
           ) : (
             <h1 className="text-lg font-bold text-[var(--foreground)]">New Song</h1>
           )}

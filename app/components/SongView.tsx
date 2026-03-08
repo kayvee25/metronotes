@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from './ui/Toast';
 import { migrateNotesToAttachment } from '../lib/migration';
 import { compressImage, validateFileSize, validateSongStorage } from '../lib/image-processing';
+import { saveGuestBlob, deleteGuestBlob, getGuestBlob } from '../lib/guest-blob-storage';
 import { validateAudioFile, extractAudioDuration } from '../lib/audio-processing';
 import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
 import { loadPdfJs } from '../lib/pdf-loader';
@@ -356,35 +357,25 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddImage = useCallback(() => {
-    if (authState === 'guest') {
-      toast('Sign in to add images');
-      return;
-    }
     fileInputRef.current?.click();
-  }, [authState, toast]);
+  }, []);
 
   const handleAddPdf = useCallback(() => {
-    if (authState === 'guest') {
-      toast('Sign in to add PDFs');
-      return;
-    }
     pdfInputRef.current?.click();
-  }, [authState, toast]);
+  }, []);
 
   const handleAddAudio = useCallback(() => {
-    if (authState === 'guest') {
-      toast('Sign in to add backing tracks');
-      return;
-    }
     audioInputRef.current?.click();
-  }, [authState, toast]);
+  }, []);
 
   const songId = song?.id;
   const userId = user?.uid;
+  const isGuest = authState === 'guest';
 
   const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !songId || !userId) return;
+    if (!file || !songId) return;
+    if (!isGuest && !userId) return;
     e.target.value = '';
 
     setIsUploading(true);
@@ -400,19 +391,26 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         height,
       });
 
-      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, blob);
-      const storagePath = getStoragePath(userId, songId, attachment.id);
-      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+      if (isGuest) {
+        await saveGuestBlob(songId, attachment.id, blob);
+        const blobUrl = URL.createObjectURL(blob);
+        updateAttachment(attachment.id, { storageUrl: blobUrl });
+      } else {
+        const downloadUrl = await uploadAttachmentFile(userId!, songId, attachment.id, blob);
+        const storagePath = getStoragePath(userId!, songId, attachment.id);
+        updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setIsUploading(false);
     }
-  }, [songId, userId, attachments.length, addImage, updateAttachment, toast]);
+  }, [songId, userId, isGuest, attachments.length, addImage, updateAttachment, toast]);
 
   const handlePdfSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !songId || !userId) return;
+    if (!file || !songId) return;
+    if (!isGuest && !userId) return;
     e.target.value = '';
 
     if (file.type !== 'application/pdf') {
@@ -455,19 +453,26 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         pageCount,
       });
 
-      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, file, 'application/pdf');
-      const storagePath = getStoragePath(userId, songId, attachment.id);
-      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+      if (isGuest) {
+        await saveGuestBlob(songId, attachment.id, file);
+        const blobUrl = URL.createObjectURL(file);
+        updateAttachment(attachment.id, { storageUrl: blobUrl });
+      } else {
+        const downloadUrl = await uploadAttachmentFile(userId!, songId, attachment.id, file, 'application/pdf');
+        const storagePath = getStoragePath(userId!, songId, attachment.id);
+        updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'PDF upload failed');
     } finally {
       setIsUploading(false);
     }
-  }, [songId, userId, attachments, addImage, updateAttachment, toast]);
+  }, [songId, userId, isGuest, attachments, addImage, updateAttachment, toast]);
 
   const handleAudioSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !songId || !userId) return;
+    if (!file || !songId) return;
+    if (!isGuest && !userId) return;
     e.target.value = '';
 
     const audioError = validateAudioFile(file);
@@ -501,15 +506,21 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         duration,
       });
 
-      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, file, 'audio/mpeg');
-      const storagePath = getStoragePath(userId, songId, attachment.id);
-      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+      if (isGuest) {
+        await saveGuestBlob(songId, attachment.id, file);
+        const blobUrl = URL.createObjectURL(file);
+        updateAttachment(attachment.id, { storageUrl: blobUrl });
+      } else {
+        const downloadUrl = await uploadAttachmentFile(userId!, songId, attachment.id, file, 'audio/mpeg');
+        const storagePath = getStoragePath(userId!, songId, attachment.id);
+        updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Audio upload failed');
     } finally {
       setIsUploading(false);
     }
-  }, [songId, userId, attachments, addImage, updateAttachment, toast]);
+  }, [songId, userId, isGuest, attachments, addImage, updateAttachment, toast]);
 
   // Handle audio mode changes — stop any active playback
   const handleAudioModeChange = useCallback((newMode: AudioMode) => {
@@ -630,6 +641,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           backingTrackControls={backingTrackControls}
           countInBars={countInBars}
           onCountInBarsChange={setCountInBars}
+          isGuest={isGuest}
         />
       )}
 

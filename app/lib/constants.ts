@@ -74,6 +74,10 @@ export const ANIMATION = {
   PAGE_SETTLE_MS: 20,
 } as const;
 
+export const GUEST = {
+  MAX_SONGS: 3,
+} as const;
+
 // localStorage keys — single source of truth
 export const STORAGE_KEYS = {
   SONGS: 'metronotes_songs',

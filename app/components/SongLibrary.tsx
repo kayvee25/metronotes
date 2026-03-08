@@ -15,6 +15,7 @@ import {
 } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import SongDownloadIcon from './ui/SongDownloadIcon';
+import { GUEST } from '../lib/constants';
 
 type SongSortOption = 'name-az' | 'name-za' | 'bpm-low' | 'bpm-high' | 'recent-added' | 'recent-updated';
 
@@ -55,11 +56,12 @@ interface SongLibraryProps {
   refresh: () => Promise<void>;
   onSelectSong?: (song: Song) => void;
   onEditSong?: (song: Song) => void;
-  onCreateSong?: (input: SongInput) => Song;
+  onCreateSong?: (input: SongInput) => Song | null;
   onQuickAddSong?: (song: Song) => void;
+  isGuest?: boolean;
 }
 
-export default function SongLibrary({ songs, isLoading, error, deleteSong, refresh, onSelectSong, onEditSong, onCreateSong, onQuickAddSong }: SongLibraryProps) {
+export default function SongLibrary({ songs, isLoading, error, deleteSong, refresh, onSelectSong, onEditSong, onCreateSong, onQuickAddSong, isGuest = false }: SongLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SongSortOption>(() => {
     if (typeof window === 'undefined') return 'name-az';
@@ -136,6 +138,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
       bpm: clampedBpm,
       timeSignature: qaTimeSig,
     });
+    if (!newSong) return; // Guest limit reached
     setShowQuickAdd(false);
     setQaName('');
     setQaBpm(String(BPM.DEFAULT));
@@ -313,6 +316,13 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
           </SwipeableList>
         )}
       </div>
+
+      {/* Guest mode footer */}
+      {isGuest && (
+        <div className="px-4 py-3 text-center text-xs text-[var(--muted)]">
+          {songs.length}/{GUEST.MAX_SONGS} songs · <span className="text-[var(--accent)] font-medium">Sign in for unlimited</span>
+        </div>
+      )}
 
       {/* FAB */}
       <button

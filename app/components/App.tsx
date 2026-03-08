@@ -10,7 +10,7 @@ import AuthScreen from './AuthScreen';
 import EmailVerificationScreen from './EmailVerificationScreen';
 import { Song, Setlist, SongInput } from '../types';
 import { useSongs } from '../hooks/useSongs';
-import { useAuthProvider, AuthContext } from '../hooks/useAuth';
+import { useAuthProvider, useAuth, AuthContext } from '../hooks/useAuth';
 import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { migrateLocalToFirestore } from '../lib/firestore';
@@ -31,6 +31,8 @@ function getInitialDarkMode(): boolean {
 }
 
 function AppInner() {
+  const { authState } = useAuth();
+  const isGuest = authState === 'guest';
   const [activeTab, setActiveTab] = useState<Tab>('songs');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [showSongView, setShowSongView] = useState(false);
@@ -159,6 +161,7 @@ function AppInner() {
       }
     } else {
       const newSong = createSong(data);
+      if (!newSong) return; // Guest limit reached
       setSelectedSong(newSong);
       setNavigationSource('songs');
     }
@@ -287,6 +290,7 @@ function AppInner() {
                 onEditSong={handleEditSong}
                 onCreateSong={createSong}
                 onQuickAddSong={handleCreateFromQuickAdd}
+                isGuest={isGuest}
               />
             )}
             {activeTab === 'setlists' && (
@@ -349,6 +353,7 @@ function AppInner() {
 export default function App() {
   const authValue = useAuthProvider();
   const [migrationState, setMigrationState] = useState<'idle' | 'migrating' | 'done'>('idle');
+  const [migrationProgress, setMigrationProgress] = useState<{ current: number; total: number } | null>(null);
   const migrationStarted = useRef(false);
 
   // Migration: when user signs in, check for localStorage data and upload to Firestore
@@ -357,7 +362,7 @@ export default function App() {
     migrationStarted.current = true;
 
     const runMigration = async () => {
-        const songsData = localStorage.getItem(STORAGE_KEYS.SONGS);
+      const songsData = localStorage.getItem(STORAGE_KEYS.SONGS);
       const setlistsData = localStorage.getItem(STORAGE_KEYS.SETLISTS);
 
       const hasLocalData =
@@ -367,9 +372,12 @@ export default function App() {
       if (hasLocalData) {
         setMigrationState('migrating');
         try {
-          await migrateLocalToFirestore(authValue.user!.uid);
+          await migrateLocalToFirestore(authValue.user!.uid, (current, total) => {
+            setMigrationProgress({ current, total });
+          });
         } finally {
           setMigrationState('done');
+          setMigrationProgress(null);
         }
       } else {
         setMigrationState('done');
@@ -413,7 +421,14 @@ export default function App() {
           {migrationState === 'migrating' ? 'Migrating your data...' : 'Loading...'}
         </div>
         {migrationState === 'migrating' && (
-          <div className="text-sm text-[var(--muted)]">This will only happen once</div>
+          <>
+            {migrationProgress && migrationProgress.total > 0 && (
+              <div className="text-sm text-[var(--muted)]">
+                Uploading {migrationProgress.current}/{migrationProgress.total} items...
+              </div>
+            )}
+            <div className="text-xs text-[var(--muted)]">This will only happen once</div>
+          </>
         )}
       </div>
     );

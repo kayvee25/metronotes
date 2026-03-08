@@ -14,6 +14,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { STORAGE_KEYS } from '../lib/constants';
+import { clearAllCache } from '../lib/offline-cache';
+import { clearAllGuestBlobs } from '../lib/guest-blob-storage';
 
 export type AuthState = 'loading' | 'unauthenticated' | 'unverified' | 'authenticated' | 'guest';
 
@@ -157,6 +159,10 @@ export function useAuthProvider(): AuthContextValue {
     try {
       await firebaseSignOut(auth);
       localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
+      localStorage.removeItem(STORAGE_KEYS.SONGS);
+      localStorage.removeItem(STORAGE_KEYS.SETLISTS);
+      // Clear all cached/local data so next session starts clean
+      await Promise.all([clearAllCache(), clearAllGuestBlobs()]);
       setAuthState('unauthenticated');
     } catch (error: unknown) {
       const e = error as { message?: string };

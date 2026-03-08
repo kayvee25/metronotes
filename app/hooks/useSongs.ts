@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Song, SongInput, SongUpdate } from '../types';
 import { storage } from '../lib/storage';
+import { GUEST } from '../lib/constants';
+import { deleteAllGuestBlobs } from '../lib/guest-blob-storage';
 import { useAuth } from './useAuth';
 import {
   firestoreGetSongs,
@@ -66,8 +68,12 @@ export function useSongs(onError?: (message: string) => void) {
     }
   }, [isGuest, userId]);
 
-  const createSong = useCallback((input: SongInput): Song => {
+  const createSong = useCallback((input: SongInput): Song | null => {
     if (isGuest) {
+      if (songs.length >= GUEST.MAX_SONGS) {
+        onErrorRef.current?.(`Guest mode is limited to ${GUEST.MAX_SONGS} songs. Sign in for unlimited songs.`);
+        return null;
+      }
       const song = storage.createSong(input);
       setSongs(storage.getSongs());
       return song;
@@ -118,6 +124,7 @@ export function useSongs(onError?: (message: string) => void) {
   const deleteSong = useCallback((id: string): boolean => {
     if (isGuest) {
       storage.deleteAllAttachments(id);
+      deleteAllGuestBlobs(id); // Clean up IndexedDB binary files
       const result = storage.deleteSong(id);
       if (result) setSongs(storage.getSongs());
       return result;

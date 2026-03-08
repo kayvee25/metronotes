@@ -75,6 +75,7 @@ interface EditModeProps {
   };
   countInBars?: number;
   onCountInBarsChange?: (bars: number) => void;
+  isGuest?: boolean;
 }
 
 export default function EditMode({
@@ -127,6 +128,7 @@ export default function EditMode({
   backingTrackControls,
   countInBars,
   onCountInBarsChange,
+  isGuest = false,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -228,6 +230,13 @@ export default function EditMode({
           Save
         </button>
       </header>
+
+      {/* Guest mode banner */}
+      {isGuest && (
+        <div className="px-4 py-2 bg-[var(--accent)]/10 text-xs text-[var(--accent)] text-center font-medium">
+          Local only — sign in to sync across devices
+        </div>
+      )}
 
       {/* Controls section */}
       <div className="px-4 py-3 border-b border-[var(--border)]">

@@ -1,19 +1,24 @@
 'use client';
 
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
-import { Song, SongInput, Setlist, Attachment } from '../types';
+import { Song, SongInput, Setlist, Attachment, DrawingData, AnnotationLayer } from '../types';
 import { useMetronomeAudio, MetronomeSound } from '../hooks/useMetronomeAudio';
 import { useAttachments } from '../hooks/useAttachments';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from './ui/Toast';
 import { migrateNotesToAttachment } from '../lib/migration';
-import { compressImage } from '../lib/image-processing';
+import { compressImage, validateFileSize, validateSongStorage } from '../lib/image-processing';
 import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
+import { loadPdfJs } from '../lib/pdf-loader';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
 import TimeSignatureModal from './song/TimeSignatureModal';
 import SaveSongModal from './song/SaveSongModal';
 import RichTextEditor from './song/RichTextEditor';
+import DrawingCanvas from './song/DrawingCanvas';
+import AnnotationOverlay from './song/AnnotationOverlay';
+import PdfAnnotationOverlay from './song/PdfAnnotationOverlay';
 
 type Mode = 'performance' | 'edit';
 
@@ -90,6 +95,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   metronomeSound = 'default',
 }, ref) {
   const { authState, user } = useAuth();
+  const { toast } = useToast();
   const [formState, setFormState] = useState<FormState>(() => getInitialFormState(song, initialEditMode));
   const [showTimeSigModal, setShowTimeSigModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -123,7 +129,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     deleteAttachment,
     reorderAttachments,
     setDefault,
-  } = useAttachments(song?.id || null);
+  } = useAttachments(song?.id || null, toast);
 
   // Migrate plain-text notes to attachment on first load
   useEffect(() => {
@@ -207,13 +213,44 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
   const [isNewAttachment, setIsNewAttachment] = useState(false);
 
+  // Drawing state
+  const [editingDrawing, setEditingDrawing] = useState<Attachment | null>(null);
+  const [isNewDrawing, setIsNewDrawing] = useState(false);
+
+  // Annotation state (for image annotations)
+  const [annotatingAttachment, setAnnotatingAttachment] = useState<Attachment | null>(null);
+
+  // PDF annotation state
+  const [annotatingPdf, setAnnotatingPdf] = useState<Attachment | null>(null);
+
   // Attachment handlers
   const handleEditAttachment = useCallback((attachment: Attachment) => {
     if (attachment.type === 'richtext') {
       setIsNewAttachment(false);
       setEditingAttachment(attachment);
+    } else if (attachment.type === 'image' && attachment.storageUrl) {
+      setAnnotatingAttachment(attachment);
+    } else if (attachment.type === 'pdf' && attachment.storageUrl) {
+      setAnnotatingPdf(attachment);
+    } else if (attachment.type === 'drawing') {
+      setIsNewDrawing(false);
+      setEditingDrawing(attachment);
     }
   }, []);
+
+  const handleAnnotationSave = useCallback((annotations: AnnotationLayer) => {
+    if (annotatingAttachment) {
+      updateAttachment(annotatingAttachment.id, { annotations });
+    }
+    setAnnotatingAttachment(null);
+  }, [annotatingAttachment, updateAttachment]);
+
+  const handlePdfAnnotationSave = useCallback((pageAnnotations: Record<number, AnnotationLayer>) => {
+    if (annotatingPdf) {
+      updateAttachment(annotatingPdf.id, { pageAnnotations });
+    }
+    setAnnotatingPdf(null);
+  }, [annotatingPdf, updateAttachment]);
 
   const handleAddText = useCallback(() => {
     setIsNewAttachment(true);
@@ -237,16 +274,45 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     setIsNewAttachment(false);
   }, []);
 
+  // Drawing handlers
+  const handleAddDrawing = useCallback(() => {
+    setIsNewDrawing(true);
+    setEditingDrawing({ id: '', type: 'drawing', order: 0, isDefault: false, createdAt: '', updatedAt: '' });
+  }, []);
+
+  const handleDrawingSave = useCallback((data: DrawingData) => {
+    if (isNewDrawing) {
+      addImage({
+        type: 'drawing',
+        order: attachments.length,
+        isDefault: attachments.length === 0,
+        drawingData: data,
+      });
+    } else if (editingDrawing) {
+      updateAttachment(editingDrawing.id, { drawingData: data });
+    }
+    setEditingDrawing(null);
+    setIsNewDrawing(false);
+  }, [isNewDrawing, editingDrawing, addImage, attachments.length, updateAttachment]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddImage = useCallback(() => {
     if (authState === 'guest') {
-      setImageError('Sign in to add images');
+      toast('Sign in to add images');
       return;
     }
     fileInputRef.current?.click();
-  }, [authState]);
+  }, [authState, toast]);
+
+  const handleAddPdf = useCallback(() => {
+    if (authState === 'guest') {
+      toast('Sign in to add PDFs');
+      return;
+    }
+    pdfInputRef.current?.click();
+  }, [authState, toast]);
 
   const songId = song?.id;
   const userId = user?.uid;
@@ -257,7 +323,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     // Reset input so same file can be selected again
     e.target.value = '';
 
-    setImageError(null);
+
     try {
       const { blob, width, height } = await compressImage(file);
       const attachment = await addImage({
@@ -274,9 +340,66 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       const storagePath = getStoragePath(userId, songId, attachment.id);
       updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : 'Upload failed');
+      toast(err instanceof Error ? err.message : 'Upload failed');
     }
-  }, [songId, userId, attachments.length, addImage, updateAttachment]);
+  }, [songId, userId, attachments.length, addImage, updateAttachment, toast]);
+
+  const handlePdfSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !songId || !userId) return;
+    e.target.value = '';
+
+    // Validate MIME type
+    if (file.type !== 'application/pdf') {
+      toast('This file is not a valid PDF');
+      return;
+    }
+
+    // Validate file size
+    const sizeError = validateFileSize(file.size, 'pdf');
+    if (sizeError) {
+      toast(sizeError);
+      return;
+    }
+
+    // Validate song storage total
+    const currentTotal = attachments.reduce((sum, a) => sum + (a.fileSize || 0), 0);
+    const songError = validateSongStorage(currentTotal, file.size);
+    if (songError) {
+      toast(songError);
+      return;
+    }
+
+    try {
+      // Extract page count using PDF.js (lazy-loaded via shared loader)
+      let pageCount = 0;
+      try {
+        const pdfjs = await loadPdfJs();
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        pageCount = pdf.numPages;
+        pdf.destroy();
+      } catch {
+        // If page count extraction fails, still allow upload
+        pageCount = 0;
+      }
+
+      const attachment = await addImage({
+        type: 'pdf',
+        order: attachments.length,
+        isDefault: attachments.length === 0,
+        fileName: file.name,
+        fileSize: file.size,
+        pageCount,
+      });
+
+      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, file, 'application/pdf');
+      const storagePath = getStoragePath(userId, songId, attachment.id);
+      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'PDF upload failed');
+    }
+  }, [songId, userId, attachments, addImage, updateAttachment, toast]);
 
   // Expose save method to parent via ref
   useImperativeHandle(ref, () => ({
@@ -289,6 +412,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         <PerformanceMode
           song={song}
           attachments={attachments}
+          attachmentsLoading={attachmentsLoading}
           musicalKey={musicalKey}
           bpm={bpm}
           timeSignature={timeSignature}
@@ -342,6 +466,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onReorderAttachments={reorderAttachments}
           onAddTextAttachment={handleAddText}
           onAddImageAttachment={handleAddImage}
+          onAddPdfAttachment={handleAddPdf}
+          onAddDrawingAttachment={handleAddDrawing}
         />
       )}
 
@@ -369,6 +495,43 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onCancel={handleEditorCancel}
       />
 
+      <DrawingCanvas
+        isOpen={!!editingDrawing}
+        initialData={editingDrawing?.drawingData}
+        onSave={handleDrawingSave}
+      />
+
+      {annotatingAttachment && annotatingAttachment.storageUrl && (
+        <AnnotationOverlay
+          isOpen={true}
+          backgroundContent={
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={annotatingAttachment.storageUrl}
+              alt={annotatingAttachment.fileName || 'Image'}
+              className="max-w-full max-h-full object-contain"
+              style={{ width: annotatingAttachment.width, height: annotatingAttachment.height }}
+            />
+          }
+          baseWidth={annotatingAttachment.width || 800}
+          baseHeight={annotatingAttachment.height || 600}
+          initialAnnotations={annotatingAttachment.annotations}
+          onSave={handleAnnotationSave}
+          title={annotatingAttachment.name || annotatingAttachment.fileName || 'Annotate'}
+        />
+      )}
+
+      {annotatingPdf && annotatingPdf.storageUrl && (
+        <PdfAnnotationOverlay
+          isOpen={true}
+          storageUrl={annotatingPdf.storageUrl}
+          pageCount={annotatingPdf.pageCount}
+          initialPageAnnotations={annotatingPdf.pageAnnotations}
+          onSave={handlePdfAnnotationSave}
+          title={annotatingPdf.name || annotatingPdf.fileName || 'Annotate PDF'}
+        />
+      )}
+
       {/* Hidden file input for image uploads */}
       <input
         ref={fileInputRef}
@@ -378,15 +541,15 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onChange={handleFileSelected}
       />
 
-      {/* Image error toast */}
-      {imageError && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[var(--accent-danger)] text-white text-sm font-medium shadow-lg">
-          {imageError}
-          <button onClick={() => setImageError(null)} className="ml-2 opacity-75 hover:opacity-100">
-            &times;
-          </button>
-        </div>
-      )}
+      {/* Hidden file input for PDF uploads */}
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={handlePdfSelected}
+      />
+
     </>
   );
 });

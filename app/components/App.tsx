@@ -15,6 +15,8 @@ import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { migrateLocalToFirestore } from '../lib/firestore';
 import { ConfirmProvider } from './ui/ConfirmModal';
+import { ToastProvider, useToast } from './ui/Toast';
+import OfflineBanner from './ui/OfflineBanner';
 
 type NavigationSource = 'none' | 'songs' | 'setlists';
 type PendingNav = { type: 'tab'; tab: Tab } | { type: 'back' } | null;
@@ -36,7 +38,8 @@ function AppInner() {
   const [isDarkMode, setIsDarkMode] = useState(getInitialDarkMode);
   const [editModeOnOpen, setEditModeOnOpen] = useState(false);
   const [returnToSetlistId, setReturnToSetlistId] = useState<string | null>(null);
-  const { songs, createSong, updateSong } = useSongs();
+  const { toast } = useToast();
+  const { songs, createSong, updateSong, deleteSong, isLoading: songsLoading, error: songsError, refresh: refreshSongs } = useSongs(toast);
   const perfSettings = usePerformanceSettings();
 
   // Keep screen on during performance mode
@@ -249,6 +252,7 @@ function AppInner() {
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
+      <OfflineBanner />
       <main>
         {showSongView ? (
           <SongView
@@ -272,6 +276,11 @@ function AppInner() {
           <>
             {activeTab === 'songs' && (
               <SongLibrary
+                songs={songs}
+                isLoading={songsLoading}
+                error={songsError}
+                deleteSong={deleteSong}
+                refresh={refreshSongs}
                 onSelectSong={handleSelectSong}
                 onEditSong={handleEditSong}
                 onCreateSong={createSong}
@@ -280,6 +289,7 @@ function AppInner() {
             )}
             {activeTab === 'setlists' && (
               <SetlistLibrary
+                songs={songs}
                 onPlaySetlist={handlePlaySetlist}
                 initialViewSetlistId={returnToSetlistId}
                 onInitialViewConsumed={() => setReturnToSetlistId(null)}
@@ -425,9 +435,11 @@ export default function App() {
   // Authenticated (migration done) or guest — show the app
   return (
     <AuthContext.Provider value={authValue}>
-      <ConfirmProvider>
-        <AppInner />
-      </ConfirmProvider>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AppInner />
+        </ConfirmProvider>
+      </ToastProvider>
     </AuthContext.Provider>
   );
 }

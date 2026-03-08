@@ -37,8 +37,19 @@ export default function AttachmentCard({
   dragHandleProps,
 }: AttachmentCardProps) {
   const isText = attachment.type === 'richtext';
-  const isUploading = !isText && !attachment.storageUrl;
-  const preview = isText ? getTextPreview(attachment.content) : isUploading ? 'Uploading...' : attachment.fileName || 'Image';
+  const isPdf = attachment.type === 'pdf';
+  const isDrawing = attachment.type === 'drawing';
+  const isMedia = attachment.type === 'image' || isPdf;
+  const isUploading = isMedia && !attachment.storageUrl;
+  const preview = isText
+    ? getTextPreview(attachment.content)
+    : isDrawing
+      ? 'Freehand drawing'
+      : isUploading
+        ? 'Uploading...'
+        : isPdf
+          ? `${attachment.pageCount || '?'} ${attachment.pageCount === 1 ? 'page' : 'pages'}`
+          : attachment.fileName || 'Image';
   const [localName, setLocalName] = useState(attachment.name || '');
 
   return (
@@ -59,6 +70,22 @@ export default function AttachmentCard({
           <svg className="w-4 h-4 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
+        ) : isDrawing ? (
+          <svg className="w-4 h-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        ) : isPdf ? (
+          attachment.storageUrl ? (
+            <svg className="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
+              <text x="12" y="17" textAnchor="middle" fontSize="6" fontWeight="bold" fill="currentColor">PDF</text>
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 text-[var(--muted)] animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
+              <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+            </svg>
+          )
         ) : attachment.storageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={attachment.storageUrl} alt="" className="w-full h-full object-cover" />
@@ -81,7 +108,7 @@ export default function AttachmentCard({
               onNameChange(localName);
             }
           }}
-          placeholder={isText ? 'Text' : 'Image'}
+          placeholder={isText ? 'Text' : isDrawing ? 'Drawing' : isPdf ? 'PDF' : 'Image'}
           className="text-sm text-[var(--foreground)] bg-transparent w-full truncate placeholder:text-[var(--foreground)] focus:placeholder:text-[var(--muted)] outline-none"
         />
         <p className="text-xs text-[var(--muted)] truncate">{preview}</p>

@@ -40,6 +40,8 @@ interface EditModeProps {
   onReorderAttachments: (orderedIds: string[]) => void;
   onAddTextAttachment: () => void;
   onAddImageAttachment: () => void;
+  onAddPdfAttachment: () => void;
+  onAddDrawingAttachment: () => void;
 }
 
 export default function EditMode({
@@ -73,6 +75,8 @@ export default function EditMode({
   onReorderAttachments,
   onAddTextAttachment,
   onAddImageAttachment,
+  onAddPdfAttachment,
+  onAddDrawingAttachment,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -260,6 +264,8 @@ export default function EditMode({
         onReorder={onReorderAttachments}
         onAddText={onAddTextAttachment}
         onAddImage={onAddImageAttachment}
+        onAddPdf={onAddPdfAttachment}
+        onAddDrawing={onAddDrawingAttachment}
       />
 
       {/* Floating metronome pill */}

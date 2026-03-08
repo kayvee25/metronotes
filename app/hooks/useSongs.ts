@@ -12,7 +12,7 @@ import {
   firestoreDeleteAllAttachments,
 } from '../lib/firestore';
 
-export function useSongs() {
+export function useSongs(onError?: (message: string) => void) {
   const { user, authState } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,7 +80,7 @@ export function useSongs() {
         setSongs(prev => prev.map(s => s.id === tempId ? song : s));
       }).catch(() => {
         setSongs(prev => prev.filter(s => s.id !== tempId));
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
       });
     }
     return tempSong;
@@ -105,8 +105,7 @@ export function useSongs() {
 
     if (userId) {
       firestoreUpdateSong(userId, id, update).catch(() => {
-        // Revert on failure — refresh from Firestore
-        setError("Can't save — check your internet connection.");
+        onError?.("Can't save — check your internet connection.");
         firestoreGetSongs(userId).then(setSongs).catch(() => {});
       });
     }
@@ -129,7 +128,7 @@ export function useSongs() {
       firestoreDeleteAllAttachments(userId, id)
         .then(() => firestoreDeleteSong(userId, id))
         .catch(() => {
-          setError("Can't save — check your internet connection.");
+          onError?.("Can't delete — check your internet connection.");
           firestoreGetSongs(userId).then(setSongs).catch(() => {});
         });
     }

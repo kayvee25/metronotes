@@ -24,7 +24,26 @@ export type SongUpdate = Partial<SongInput>;
 export type SetlistInput = Omit<Setlist, 'id' | 'createdAt' | 'updatedAt'>;
 export type SetlistUpdate = Partial<SetlistInput>;
 
-export type AttachmentType = 'richtext' | 'image';
+export type AttachmentType = 'richtext' | 'image' | 'pdf' | 'drawing';
+
+export interface Stroke {
+  id: string;
+  points: Array<[number, number, number]>; // [x, y, pressure]
+  color: string;
+  tool: 'pen';
+}
+
+export interface DrawingData {
+  strokes: Stroke[];
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
+export interface AnnotationLayer {
+  strokes: Stroke[];
+  baseWidth: number;
+  baseHeight: number;
+}
 
 export interface Attachment {
   id: string;
@@ -36,13 +55,25 @@ export interface Attachment {
   // richtext
   content?: object; // Tiptap JSON document
 
-  // image
+  // image / pdf
   storageUrl?: string;
   storagePath?: string;
   fileName?: string;
   fileSize?: number; // bytes
   width?: number;
   height?: number;
+
+  // pdf
+  pageCount?: number;
+
+  // drawing
+  drawingData?: DrawingData;
+
+  // annotations (on image attachments)
+  annotations?: AnnotationLayer;
+
+  // annotations (on PDF attachments, per page)
+  pageAnnotations?: Record<number, AnnotationLayer>;
 
   // Reserved for future collaboration
   userId?: string;

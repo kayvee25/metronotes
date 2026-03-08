@@ -52,9 +52,11 @@ export default function RichTextEditor({
       const newContent = content || { type: 'doc', content: [{ type: 'paragraph' }] };
       savedContentRef.current = content;
       editor.commands.setContent(newContent);
-      setEditorDirty(false);
-      // Focus editor after opening
-      setTimeout(() => editor.commands.focus('end'), 100);
+      // Focus editor after opening; dirty state resets via the editor update handler
+      setTimeout(() => {
+        setEditorDirty(false);
+        editor.commands.focus('end');
+      }, 100);
     }
   }, [isOpen, editor, content]);
 

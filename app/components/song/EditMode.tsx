@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Song, Attachment } from '../../types';
 import { BPM } from '../../lib/constants';
 import KeySelector from '../KeySelector';
-import MetronomePill from '../ui/MetronomePill';
+import PlayFAB from '../ui/PlayFAB';
 import AttachmentList from './AttachmentList';
 
 interface EditModeProps {
@@ -268,8 +268,8 @@ export default function EditMode({
         onAddDrawing={onAddDrawingAttachment}
       />
 
-      {/* Floating metronome pill */}
-      <MetronomePill
+      {/* Floating play FAB */}
+      <PlayFAB
         bpm={bpm}
         isPlaying={isPlaying}
         currentBeat={currentBeat}

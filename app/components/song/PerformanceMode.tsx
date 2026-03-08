@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Song, Setlist, Attachment } from '../../types';
 import { ANIMATION } from '../../lib/constants';
-import MetronomePill from '../ui/MetronomePill';
+import PlayFAB from '../ui/PlayFAB';
 import PageDots from '../ui/PageDots';
 import AttachmentPage from './AttachmentPage';
 
@@ -228,8 +228,8 @@ export default function PerformanceMode({
 
       </div>
 
-      {/* Floating metronome pill */}
-      <MetronomePill
+      {/* Floating play FAB */}
+      <PlayFAB
         bpm={bpm}
         isPlaying={isPlaying}
         currentBeat={currentBeat}

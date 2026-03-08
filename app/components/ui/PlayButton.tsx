@@ -1,6 +1,6 @@
 'use client';
 
-interface MetronomeButtonProps {
+interface PlayButtonProps {
   isPlaying: boolean;
   onClick: () => void;
   size?: 'sm' | 'md' | 'lg';
@@ -8,20 +8,10 @@ interface MetronomeButtonProps {
   className?: string;
 }
 
-// Metronome icon SVG paths
-const MetronomeIcon = ({ className }: { className: string }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 20h14l-3-15H8l-3 15z" />
-    <path d="M12 16l5-10" />
-    <circle cx="17" cy="6" r="1.5" fill="currentColor" />
+// Play triangle icon
+const PlayIcon = ({ className }: { className: string }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M8 5v14l11-7z" />
   </svg>
 );
 
@@ -39,13 +29,13 @@ const sizeClasses = {
   lg: { button: 'w-14 h-14', icon: 'w-8 h-8' },
 };
 
-export default function MetronomeButton({
+export default function PlayButton({
   isPlaying,
   onClick,
   size = 'md',
   variant = 'rect',
   className = '',
-}: MetronomeButtonProps) {
+}: PlayButtonProps) {
   const { button, icon } = sizeClasses[size];
   const shapeClass = variant === 'round' ? 'rounded-full' : 'rounded-xl';
 
@@ -60,7 +50,7 @@ export default function MetronomeButton({
       {isPlaying ? (
         <PauseIcon className={`${icon} text-white`} />
       ) : (
-        <MetronomeIcon className={`${icon} text-white`} />
+        <PlayIcon className={`${icon} text-white`} />
       )}
     </button>
   );

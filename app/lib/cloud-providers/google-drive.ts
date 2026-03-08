@@ -3,8 +3,8 @@
 import type { CloudProvider, CloudFileResult } from './types';
 import { loadGoogleIdentityServices, loadGooglePickerApi } from './google-drive-scripts';
 
-const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PICKER_API_KEY!;
+const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PICKER_API_KEY || '';
 const APP_ID = CLIENT_ID.split('-')[0]; // GCP project number
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 

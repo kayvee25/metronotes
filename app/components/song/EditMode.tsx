@@ -56,6 +56,25 @@ interface EditModeProps {
   onBtPlay?: () => void;
   onBtPause?: () => void;
   onBtSeek?: (time: number) => void;
+  // Audio mode (PlayFAB)
+  audioMode?: 'metronome' | 'backingtrack' | 'off';
+  onAudioModeChange?: (mode: 'metronome' | 'backingtrack' | 'off') => void;
+  hasBackingTrack?: boolean;
+  backingTrackControls?: {
+    isPlaying: boolean;
+    isCountingIn: boolean;
+    currentTime: number;
+    duration: number;
+    buffered: number;
+    volume: number;
+    onPlay: () => void;
+    onPause: () => void;
+    onStop: () => void;
+    onSeek: (time: number) => void;
+    onVolumeChange: (vol: number) => void;
+  };
+  countInBars?: number;
+  onCountInBarsChange?: (bars: number) => void;
 }
 
 export default function EditMode({
@@ -102,6 +121,12 @@ export default function EditMode({
   onBtPlay,
   onBtPause,
   onBtSeek,
+  audioMode,
+  onAudioModeChange,
+  hasBackingTrack,
+  backingTrackControls,
+  countInBars,
+  onCountInBarsChange,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -321,6 +346,12 @@ export default function EditMode({
         onTogglePlay={onTogglePlay}
         onBpmChange={onBpmChange}
         onToggleMute={onToggleMute}
+        audioMode={audioMode}
+        onAudioModeChange={onAudioModeChange}
+        hasBackingTrack={hasBackingTrack}
+        backingTrackControls={backingTrackControls}
+        countInBars={countInBars}
+        onCountInBarsChange={onCountInBarsChange}
       />
     </div>
   );

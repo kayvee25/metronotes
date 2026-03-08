@@ -51,12 +51,16 @@ interface FormState {
   mode: Mode;
 }
 
+type AudioMode = 'metronome' | 'backingtrack' | 'off';
+
 interface OriginalValues {
   name: string;
   artist: string;
   bpm: number;
   timeSignature: string;
   musicalKey: string;
+  audioMode: AudioMode;
+  countInBars: number;
 }
 
 function getInitialFormState(song?: Song | null, initialEditMode?: boolean): FormState {
@@ -78,6 +82,8 @@ function getOriginalValues(song?: Song | null): OriginalValues {
     bpm: song?.bpm || BPM.DEFAULT,
     timeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT,
     musicalKey: song?.key || '',
+    audioMode: song?.audioMode || 'metronome',
+    countInBars: song?.countInBars || 1,
   };
 }
 
@@ -104,6 +110,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const [savedValues, setSavedValues] = useState<OriginalValues>(() => getOriginalValues(song));
   const migrationRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [audioMode, setAudioMode] = useState<AudioMode>(() => song?.audioMode || 'metronome');
+  const [countInBars, setCountInBars] = useState(() => song?.countInBars || 1);
+
+  // Reset audioMode/countInBars on song change
+  const prevSongIdForAudioRef = useRef(song?.id);
+  if (prevSongIdForAudioRef.current !== song?.id) {
+    prevSongIdForAudioRef.current = song?.id;
+    setAudioMode(song?.audioMode || 'metronome');
+    setCountInBars(song?.countInBars || 1);
+  }
 
   const {
     bpm,
@@ -161,7 +177,9 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       artist !== savedValues.artist ||
       bpm !== savedValues.bpm ||
       timeSignature !== savedValues.timeSignature ||
-      musicalKey !== savedValues.musicalKey
+      musicalKey !== savedValues.musicalKey ||
+      audioMode !== savedValues.audioMode ||
+      countInBars !== savedValues.countInBars
     );
 
   // Notify parent of dirty state changes
@@ -187,6 +205,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         bpm: clampedBpm,
         timeSignature,
         key: musicalKey || undefined,
+        audioMode,
+        countInBars,
       });
       setSavedValues({
         name: name.trim() || song.name,
@@ -194,6 +214,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         bpm: clampedBpm,
         timeSignature,
         musicalKey,
+        audioMode,
+        countInBars,
       });
     } else {
       if (!name.trim()) {
@@ -205,6 +227,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           bpm: clampedBpm,
           timeSignature,
           key: musicalKey || undefined,
+          audioMode,
+          countInBars,
         });
       }
     }
@@ -219,6 +243,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       bpm: clampedBpm,
       timeSignature,
       key: musicalKey || undefined,
+      audioMode,
+      countInBars,
     });
     setShowSaveModal(false);
   };
@@ -469,9 +495,35 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     }
   }, [songId, userId, attachments, addImage, updateAttachment, toast]);
 
+  // Handle audio mode changes — stop any active playback
+  const handleAudioModeChange = useCallback((newMode: AudioMode) => {
+    // Stop metronome if playing
+    if (isPlaying) {
+      togglePlayStop();
+    }
+    // Stop backing track if playing
+    bt.stop();
+    setAudioMode(newMode);
+  }, [isPlaying, togglePlayStop, bt]);
+
   // Derive audio attachment and non-audio attachments for display
   const audioAttachment = attachments.find(a => a.type === 'audio') ?? null;
   const displayAttachments = attachments.filter(a => a.type !== 'audio');
+
+  const hasBackingTrack = audioAttachment != null;
+  const backingTrackControls = bt.track ? {
+    isPlaying: bt.isPlaying,
+    isCountingIn: bt.isCountingIn,
+    currentTime: bt.currentTime,
+    duration: bt.duration,
+    buffered: bt.buffered,
+    volume: bt.volume,
+    onPlay: () => bt.play(countInBars, bpm, timeSignature),
+    onPause: bt.pause,
+    onStop: bt.stop,
+    onSeek: bt.seek,
+    onVolumeChange: bt.setVolume,
+  } : undefined;
 
   // Expose save method to parent via ref
   useImperativeHandle(ref, () => ({
@@ -504,6 +556,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           perfFontFamily={perfFontFamily}
           isMuted={isMuted}
           onToggleMute={() => setIsMuted(!isMuted)}
+          audioMode={audioMode}
+          onAudioModeChange={handleAudioModeChange}
+          hasBackingTrack={hasBackingTrack}
+          backingTrackControls={backingTrackControls}
+          countInBars={countInBars}
+          onCountInBarsChange={setCountInBars}
         />
       ) : (
         <EditMode
@@ -548,9 +606,15 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           btCurrentTime={bt.currentTime}
           btDuration={bt.duration}
           btBuffered={bt.buffered}
-          onBtPlay={() => bt.play(0, bpm, timeSignature)}
+          onBtPlay={() => bt.play(countInBars, bpm, timeSignature)}
           onBtPause={bt.pause}
           onBtSeek={bt.seek}
+          audioMode={audioMode}
+          onAudioModeChange={handleAudioModeChange}
+          hasBackingTrack={hasBackingTrack}
+          backingTrackControls={backingTrackControls}
+          countInBars={countInBars}
+          onCountInBarsChange={setCountInBars}
         />
       )}
 

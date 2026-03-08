@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { Song, SongInput, Setlist, Attachment, DrawingData, AnnotationLayer } from '../types';
 import { useMetronomeAudio, MetronomeSound } from '../hooks/useMetronomeAudio';
+import { useBackingTrack } from '../hooks/useBackingTrack';
 import { useAttachments } from '../hooks/useAttachments';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from './ui/Toast';
 import { migrateNotesToAttachment } from '../lib/migration';
 import { compressImage, validateFileSize, validateSongStorage } from '../lib/image-processing';
+import { validateAudioFile, extractAudioDuration } from '../lib/audio-processing';
 import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
 import { loadPdfJs } from '../lib/pdf-loader';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
@@ -131,6 +133,13 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     reorderAttachments,
     setDefault,
   } = useAttachments(song?.id || null, toast);
+
+  // Backing track playback
+  const bt = useBackingTrack({
+    songId: song?.id || null,
+    attachments,
+    metronomeSound,
+  });
 
   // Migrate plain-text notes to attachment on first load
   useEffect(() => {
@@ -302,6 +311,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddImage = useCallback(() => {
     if (authState === 'guest') {
@@ -317,6 +327,14 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       return;
     }
     pdfInputRef.current?.click();
+  }, [authState, toast]);
+
+  const handleAddAudio = useCallback(() => {
+    if (authState === 'guest') {
+      toast('Sign in to add backing tracks');
+      return;
+    }
+    audioInputRef.current?.click();
   }, [authState, toast]);
 
   const songId = song?.id;
@@ -405,6 +423,56 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     }
   }, [songId, userId, attachments, addImage, updateAttachment, toast]);
 
+  const handleAudioSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !songId || !userId) return;
+    e.target.value = '';
+
+    const audioError = validateAudioFile(file);
+    if (audioError) {
+      toast(audioError);
+      return;
+    }
+
+    const currentTotal = attachments.reduce((sum, a) => sum + (a.fileSize || 0), 0);
+    const songError = validateSongStorage(currentTotal, file.size);
+    if (songError) {
+      toast(songError);
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      let duration = 0;
+      try {
+        duration = await extractAudioDuration(file);
+      } catch {
+        duration = 0;
+      }
+
+      const attachment = await addImage({
+        type: 'audio',
+        order: attachments.length,
+        isDefault: false,
+        fileName: file.name,
+        fileSize: file.size,
+        duration,
+      });
+
+      const downloadUrl = await uploadAttachmentFile(userId, songId, attachment.id, file, 'audio/mpeg');
+      const storagePath = getStoragePath(userId, songId, attachment.id);
+      updateAttachment(attachment.id, { storageUrl: downloadUrl, storagePath });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Audio upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [songId, userId, attachments, addImage, updateAttachment, toast]);
+
+  // Derive audio attachment and non-audio attachments for display
+  const audioAttachment = attachments.find(a => a.type === 'audio') ?? null;
+  const displayAttachments = attachments.filter(a => a.type !== 'audio');
+
   // Expose save method to parent via ref
   useImperativeHandle(ref, () => ({
     save: handleSave,
@@ -415,7 +483,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       {mode === 'performance' ? (
         <PerformanceMode
           song={song}
-          attachments={attachments}
+          attachments={displayAttachments}
           attachmentsLoading={attachmentsLoading}
           musicalKey={musicalKey}
           bpm={bpm}
@@ -462,7 +530,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onOpenTimeSigModal={() => setShowTimeSigModal(true)}
           onSave={handleSave}
           isDirty={isDirty}
-          attachments={attachments}
+          attachments={displayAttachments}
           onEditAttachment={handleEditAttachment}
           onDeleteAttachment={deleteAttachment}
           onToggleDefaultAttachment={setDefault}
@@ -472,6 +540,17 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onAddImageAttachment={handleAddImage}
           onAddPdfAttachment={handleAddPdf}
           onAddDrawingAttachment={handleAddDrawing}
+          audioAttachment={audioAttachment}
+          onAddAudio={handleAddAudio}
+          onDeleteAudio={deleteAttachment}
+          isUploadingAudio={isUploading}
+          btIsPlaying={bt.isPlaying}
+          btCurrentTime={bt.currentTime}
+          btDuration={bt.duration}
+          btBuffered={bt.buffered}
+          onBtPlay={() => bt.play(0, bpm, timeSignature)}
+          onBtPause={bt.pause}
+          onBtSeek={bt.seek}
         />
       )}
 
@@ -552,6 +631,15 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         accept="application/pdf"
         className="hidden"
         onChange={handlePdfSelected}
+      />
+
+      {/* Hidden file input for audio uploads */}
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/mpeg"
+        className="hidden"
+        onChange={handleAudioSelected}
       />
 
     </>

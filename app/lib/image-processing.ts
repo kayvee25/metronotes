@@ -4,7 +4,7 @@ const MAX_DIMENSION = 2048;
 const COMPRESS_QUALITY = 0.8;
 const MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB
 const MAX_PDF_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_SONG_SIZE = 20 * 1024 * 1024; // 20MB per song
+const MAX_SONG_SIZE = 30 * 1024 * 1024; // 30MB per song
 
 export interface ProcessedImage {
   blob: Blob;
@@ -27,7 +27,7 @@ export function validateFileSize(size: number, type: 'image' | 'pdf' = 'image'):
 
 export function validateSongStorage(currentTotal: number, newFileSize: number): string | null {
   if (currentTotal + newFileSize > MAX_SONG_SIZE) {
-    return 'Song storage limit reached (20MB)';
+    return 'Song storage limit reached (30MB)';
   }
   return null;
 }

@@ -5,16 +5,8 @@ import { useConfirm } from './ui/ConfirmModal';
 import { Song, SongInput } from '../types';
 import { BPM, TIME_SIGNATURE, TIME_SIGNATURES } from '../lib/constants';
 import Modal from './ui/Modal';
-import {
-  SwipeableList,
-  SwipeableListItem,
-  SwipeAction,
-  LeadingActions,
-  TrailingActions,
-  Type,
-} from 'react-swipeable-list';
-import 'react-swipeable-list/dist/styles.css';
 import SongDownloadIcon from './ui/SongDownloadIcon';
+import LongPressMenu from './ui/LongPressMenu';
 import { GUEST } from '../lib/constants';
 
 type SongSortOption = 'name-az' | 'name-za' | 'bpm-low' | 'bpm-high' | 'recent-added' | 'recent-updated';
@@ -258,59 +250,45 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
             )}
           </div>
         ) : (
-          <SwipeableList type={Type.IOS} fullSwipe={false}>
+          <div>
             {sortedSongs.map((song) => (
-              <SwipeableListItem
+              <LongPressMenu
                 key={song.id}
-                leadingActions={
-                  onEditSong ? (
-                    <LeadingActions>
-                      <SwipeAction onClick={() => onEditSong(song)}>
-                        <div className="flex items-center justify-center px-6 bg-[var(--accent)] text-white h-full">
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </div>
-                      </SwipeAction>
-                    </LeadingActions>
-                  ) : undefined
-                }
-                trailingActions={
-                  <TrailingActions>
-                    <SwipeAction
-                      onClick={() => handleDeleteSong(song)}
-                    >
-                      <div className="flex items-center justify-center px-6 bg-[var(--accent-danger)] text-white h-full">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </div>
-                    </SwipeAction>
-                  </TrailingActions>
-                }
+                onTap={() => handleSongClick(song)}
+                items={[
+                  ...(onEditSong ? [{
+                    label: 'Edit',
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    ),
+                    onClick: () => onEditSong(song),
+                  }] : []),
+                  {
+                    label: 'Delete',
+                    variant: 'danger' as const,
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    ),
+                    onClick: () => handleDeleteSong(song),
+                  },
+                ]}
               >
-                <button
-                  onClick={() => handleSongClick(song)}
-                  className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)]"
-                >
+                <div className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
-                    </div>
+                    <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
                     {song.artist && (
                       <p className="text-xs text-[var(--muted)] truncate mt-0.5">{song.artist}</p>
                     )}
                   </div>
                   <SongDownloadIcon songId={song.id} />
-                  {song.key && (
-                    <span className="text-xs font-medium text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
-                      {song.key}
-                    </span>
-                  )}
-                </button>
-              </SwipeableListItem>
+                </div>
+              </LongPressMenu>
             ))}
-          </SwipeableList>
+          </div>
         )}
       </div>
 

@@ -46,7 +46,7 @@ export default function BackingTrackSection({
   const [showAddMenu, setShowAddMenu] = useState(false);
 
   const addMenuModal = (
-    <Modal isOpen={showAddMenu} onClose={() => setShowAddMenu(false)} title="Add Backing Track">
+    <Modal isOpen={showAddMenu} onClose={() => setShowAddMenu(false)} title="Add Audio">
       <div className="space-y-2 -mt-2">
         <button
           onClick={() => { onUpload(); setShowAddMenu(false); }}
@@ -85,7 +85,7 @@ export default function BackingTrackSection({
   return (
     <div className="px-4 py-3 border-t border-[var(--border)]">
       <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
-        Backing Track
+        Audio
       </label>
 
       {isUploading ? (
@@ -140,7 +140,7 @@ export default function BackingTrackSection({
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
           </svg>
-          + Add Backing Track
+          + Add Audio
         </button>
       )}
 

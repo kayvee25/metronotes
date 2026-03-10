@@ -7,15 +7,7 @@ import { useSetlists } from '../hooks/useSetlists';
 import { useToast } from './ui/Toast';
 import SetlistForm from './SetlistForm';
 import SetlistDetail from './SetlistDetail';
-import {
-  SwipeableList,
-  SwipeableListItem,
-  SwipeAction,
-  LeadingActions,
-  TrailingActions,
-  Type,
-} from 'react-swipeable-list';
-import 'react-swipeable-list/dist/styles.css';
+import LongPressMenu from './ui/LongPressMenu';
 
 type SetlistSortOption = 'name-az' | 'name-za' | 'recent-created' | 'recent-updated';
 
@@ -230,43 +222,40 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
             <p className="text-sm text-[var(--muted)]">Tap the + button to add a setlist</p>
           </div>
         ) : (
-          <SwipeableList type={Type.IOS} fullSwipe={false}>
+          <div>
             {sortedSetlists.map((setlist) => (
-              <SwipeableListItem
+              <LongPressMenu
                 key={setlist.id}
-                leadingActions={
-                  <LeadingActions>
-                    <SwipeAction onClick={() => setEditingSetlist(setlist)}>
-                      <div className="flex items-center justify-center px-6 bg-[var(--accent)] text-white h-full">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </div>
-                    </SwipeAction>
-                  </LeadingActions>
-                }
-                trailingActions={
-                  <TrailingActions>
-                    <SwipeAction onClick={() => handleDeleteSetlist(setlist)}>
-                      <div className="flex items-center justify-center px-6 bg-[var(--accent-danger)] text-white h-full">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </div>
-                    </SwipeAction>
-                  </TrailingActions>
-                }
+                onTap={() => setViewingSetlist(setlist)}
+                items={[
+                  {
+                    label: 'Edit',
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    ),
+                    onClick: () => setEditingSetlist(setlist),
+                  },
+                  {
+                    label: 'Delete',
+                    variant: 'danger' as const,
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    ),
+                    onClick: () => handleDeleteSetlist(setlist),
+                  },
+                ]}
               >
-                <button
-                  onClick={() => setViewingSetlist(setlist)}
-                  className="w-full flex items-center justify-between px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)]"
-                >
+                <div className="w-full flex items-center justify-between px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer">
                   <h3 className="font-semibold text-[var(--foreground)]">{setlist.name}</h3>
                   <span className="text-sm text-[var(--muted)] flex-shrink-0">{getTotalDuration(setlist)}</span>
-                </button>
-              </SwipeableListItem>
+                </div>
+              </LongPressMenu>
             ))}
-          </SwipeableList>
+          </div>
         )}
       </div>
 

@@ -37,8 +37,39 @@ function nameFromFile(fileName: string): string {
 }
 
 
+export type AudioMode = 'metronome' | 'backingtrack' | 'off';
+
+export interface TransportState {
+  bpm: number;
+  timeSignature: string;
+  isPlaying: boolean;
+  currentBeat: number;
+  isBeating: boolean;
+  isMuted: boolean;
+  audioMode: AudioMode;
+  hasBackingTrack: boolean;
+  audioAttachments: Attachment[];
+  btIsPlaying: boolean;
+  btIsCountingIn: boolean;
+  btCurrentTime: number;
+  btDuration: number;
+  btBuffered: number;
+  btVolume: number;
+}
+
 export interface SongViewHandle {
   save: () => void;
+  togglePlay: () => void;
+  changeBpm: (bpm: number) => void;
+  toggleMute: () => void;
+  changeAudioMode: (mode: AudioMode) => void;
+  btPlay: () => void;
+  btPause: () => void;
+  btStop: () => void;
+  btSeek: (time: number) => void;
+  btSetVolume: (vol: number) => void;
+  switchToEdit: () => void;
+  switchToPerformance: () => void;
 }
 
 interface SongViewProps {
@@ -57,6 +88,8 @@ interface SongViewProps {
   metronomeSound?: MetronomeSound;
   hidePerformanceHeader?: boolean;
   hidePlayFab?: boolean;
+  onTransportUpdate?: (state: TransportState) => void;
+  onModeChange?: (mode: 'performance' | 'edit') => void;
 }
 
 interface FormState {
@@ -65,8 +98,6 @@ interface FormState {
   musicalKey: string;
   mode: Mode;
 }
-
-type AudioMode = 'metronome' | 'backingtrack' | 'off';
 
 interface OriginalValues {
   name: string;
@@ -118,6 +149,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   metronomeSound = 'default',
   hidePerformanceHeader = false,
   hidePlayFab = false,
+  onTransportUpdate,
+  onModeChange,
 }, ref) {
   const { authState, user } = useAuth();
   const { toast } = useToast();
@@ -129,6 +162,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const [isUploading, setIsUploading] = useState(false);
   const [audioMode, setAudioMode] = useState<AudioMode>(() => song?.audioMode || 'metronome');
   const [countInBars, setCountInBars] = useState(() => song?.countInBars || 1);
+
+  // Notify parent of initial mode
+  const onModeChangeRef = useRef(onModeChange);
+  onModeChangeRef.current = onModeChange;
+  const initialModeNotifiedRef = useRef(false);
+  if (!initialModeNotifiedRef.current) {
+    initialModeNotifiedRef.current = true;
+    // Defer to avoid setState during render in parent
+    Promise.resolve().then(() => onModeChangeRef.current?.(formState.mode));
+  }
 
   // Reset audioMode/countInBars on song change
   const prevSongIdForAudioRef = useRef(song?.id);
@@ -225,7 +268,10 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const setName = (name: string) => setFormState(s => ({ ...s, name }));
   const setArtist = (artist: string) => setFormState(s => ({ ...s, artist }));
   const setMusicalKey = (musicalKey: string) => setFormState(s => ({ ...s, musicalKey }));
-  const setMode = (mode: Mode) => setFormState(s => ({ ...s, mode }));
+  const setMode = (mode: Mode) => {
+    setFormState(s => ({ ...s, mode }));
+    onModeChange?.(mode);
+  };
 
   const handleSave = () => {
     const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpm));
@@ -642,9 +688,44 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     onVolumeChange: bt.setVolume,
   } : undefined;
 
-  // Expose save method to parent via ref
+  // Derive all audio attachments for transport source selection
+  const audioAttachments = attachments.filter(a => a.type === 'audio');
+  const audioAttachmentsRef = useRef(audioAttachments);
+  audioAttachmentsRef.current = audioAttachments;
+
+  // Report transport state to parent
+  const onTransportUpdateRef = useRef(onTransportUpdate);
+  onTransportUpdateRef.current = onTransportUpdate;
+
+  // Use audioAttachments.length as dep proxy (array ref changes every render)
+  const audioAttachmentsCount = audioAttachments.length;
+  useEffect(() => {
+    onTransportUpdateRef.current?.({
+      bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
+      audioMode, hasBackingTrack, audioAttachments: audioAttachmentsRef.current,
+      btIsPlaying: bt.isPlaying, btIsCountingIn: bt.isCountingIn,
+      btCurrentTime: bt.currentTime, btDuration: bt.duration,
+      btBuffered: bt.buffered, btVolume: bt.volume,
+    });
+  }, [bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
+      audioMode, hasBackingTrack, audioAttachmentsCount,
+      bt.isPlaying, bt.isCountingIn, bt.currentTime, bt.duration,
+      bt.buffered, bt.volume]);
+
+  // Expose save and transport actions to parent via ref
   useImperativeHandle(ref, () => ({
     save: handleSave,
+    togglePlay: togglePlayStop,
+    changeBpm: handleBpmChange,
+    toggleMute: () => setIsMuted(!isMuted),
+    changeAudioMode: handleAudioModeChange,
+    btPlay: () => bt.play(countInBars, bpm, timeSignature),
+    btPause: bt.pause,
+    btStop: bt.stop,
+    btSeek: bt.seek,
+    btSetVolume: bt.setVolume,
+    switchToEdit: () => setMode('edit'),
+    switchToPerformance: () => setMode('performance'),
   }));
 
   return (
@@ -737,6 +818,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           isGuest={isGuest}
           onAddFromCloud={cloudAvailable ? handleAddFromCloud : undefined}
           onAddAudioFromCloud={cloudAvailable ? handleAddAudioFromCloud : undefined}
+          hideHeader={hidePerformanceHeader}
+          hidePlayFab={hidePlayFab}
         />
       )}
 

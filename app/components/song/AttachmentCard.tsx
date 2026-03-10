@@ -152,8 +152,8 @@ export default function AttachmentCard({
         </svg>
       </button>
 
-      {/* Edit button — hidden for cloud-linked images/PDFs (no annotation support) */}
-      {canEdit && (
+      {/* Edit button — or Open in Drive for cloud-linked files */}
+      {canEdit ? (
         <button
           onClick={onEdit}
           className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-[var(--background)] flex items-center justify-center"
@@ -163,7 +163,19 @@ export default function AttachmentCard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
         </button>
-      )}
+      ) : isCloud && attachment.cloudWebViewLink ? (
+        <a
+          href={attachment.cloudWebViewLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-[var(--background)] flex items-center justify-center"
+          aria-label="Open in Google Drive"
+        >
+          <svg className="w-4 h-4 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      ) : null}
 
       {/* Delete button */}
       <button

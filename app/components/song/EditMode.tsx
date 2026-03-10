@@ -80,6 +80,8 @@ interface EditModeProps {
   isGuest?: boolean;
   onAddFromCloud?: (providerId: CloudProviderId) => void;
   onAddAudioFromCloud?: (providerId: CloudProviderId) => void;
+  hideHeader?: boolean;
+  hidePlayFab?: boolean;
 }
 
 export default function EditMode({
@@ -136,6 +138,8 @@ export default function EditMode({
   isGuest = false,
   onAddFromCloud,
   onAddAudioFromCloud,
+  hideHeader = false,
+  hidePlayFab = false,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -164,6 +168,7 @@ export default function EditMode({
   return (
     <div className="flex flex-col min-h-screen bg-[var(--background)] max-w-2xl mx-auto w-full">
       {/* Header */}
+      {!hideHeader && (
       <header className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
         {showBack && (
           <button
@@ -244,6 +249,7 @@ export default function EditMode({
           Save
         </button>
       </header>
+      )}
 
       {/* Guest mode banner */}
       {isGuest && (
@@ -365,7 +371,7 @@ export default function EditMode({
       </div>
 
       {/* Floating play FAB */}
-      <PlayFAB
+      {!hidePlayFab && <PlayFAB
         bpm={bpm}
         isPlaying={isPlaying}
         currentBeat={currentBeat}
@@ -379,7 +385,7 @@ export default function EditMode({
         hasBackingTrack={hasBackingTrack}
         backingTrackControls={backingTrackControls}
         countInBars={countInBars}
-      />
+      />}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { SongViewHandle } from './SongView';
-import LibraryTab from './LibraryTab';
+import LibraryTab, { LibrarySubTab } from './LibraryTab';
 import LiveTab from './LiveTab';
 import LivePerformanceView from './live/LivePerformanceView';
 import Settings from './Settings';
@@ -40,6 +40,7 @@ function AppInner() {
   const [setlistIndex, setSetlistIndex] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(getInitialDarkMode);
   const [editModeOnOpen, setEditModeOnOpen] = useState(false);
+  const [librarySubTab, setLibrarySubTab] = useState<LibrarySubTab>('songs');
   const [returnToSetlistId, setReturnToSetlistId] = useState<string | null>(null);
   const { toast } = useToast();
   const { songs, createSong, updateSong, deleteSong, isLoading: songsLoading, error: songsError, refresh: refreshSongs } = useSongs(toast);
@@ -111,6 +112,7 @@ function AppInner() {
     }
     if (activeSetlist) {
       setReturnToSetlistId(activeSetlist.id);
+      setLibrarySubTab('setlists');
     }
     doNavigateBack();
   };
@@ -172,6 +174,7 @@ function AppInner() {
       if (nav.type === 'back') {
         if (activeSetlist) {
           setReturnToSetlistId(activeSetlist.id);
+          setLibrarySubTab('setlists');
         }
         setTimeout(() => {
           doNavigateBack();
@@ -221,6 +224,7 @@ function AppInner() {
     if (nav?.type === 'back') {
       if (activeSetlist) {
         setReturnToSetlistId(activeSetlist.id);
+        setLibrarySubTab('setlists');
       }
       doNavigateBack();
     } else if (nav?.type === 'tab') {
@@ -272,6 +276,8 @@ function AppInner() {
             assets={assets}
             onRenameAsset={handleRenameAsset}
             onDeleteAsset={handleDeleteAsset}
+            initialSubTab={librarySubTab}
+            onSubTabChange={setLibrarySubTab}
           />
         )}
         {activeTab === 'live' && (

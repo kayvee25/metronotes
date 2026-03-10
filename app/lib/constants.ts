@@ -88,5 +88,6 @@ export const STORAGE_KEYS = {
   PERF_FONT_FAMILY: 'metronotes_perf_font_family',
   METRONOME_SOUND: 'metronotes_metronome_sound',
   KEEP_SCREEN_ON: 'metronotes_keep_screen_on',
+  ASSETS: 'metronotes_assets',
   attachments: (songId: string) => `metronotes_attachments_${songId}`,
 } as const;

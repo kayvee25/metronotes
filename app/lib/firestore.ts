@@ -13,7 +13,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
+import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate, Asset, AssetInput, AssetUpdate } from '../types';
 import { generateId, getTimestamp } from './utils';
 import { STORAGE_KEYS } from './constants';
 import { getAllGuestBlobs, clearAllGuestBlobs } from './guest-blob-storage';
@@ -168,6 +168,45 @@ export async function firestoreReorderAttachments(userId: string, songId: string
     batch.update(ref, { order: index, updatedAt: now });
   });
   await batch.commit();
+}
+
+// Assets
+
+function assetsCollection(userId: string) {
+  return collection(db, 'users', userId, 'assets');
+}
+
+export async function firestoreGetAssets(userId: string): Promise<Asset[]> {
+  const snapshot = await getDocs(assetsCollection(userId));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Asset));
+}
+
+export async function firestoreCreateAsset(userId: string, input: AssetInput): Promise<Asset> {
+  const id = generateId();
+  const now = getTimestamp();
+  const data = stripUndefined({
+    name: input.name,
+    type: input.type,
+    mimeType: input.mimeType ?? null,
+    size: input.size ?? null,
+    storageUrl: input.storageUrl ?? null,
+    content: input.content ?? null,
+    drawingData: input.drawingData ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await setDoc(doc(db, 'users', userId, 'assets', id), data);
+  return { ...data, id } as Asset;
+}
+
+export async function firestoreUpdateAsset(userId: string, assetId: string, update: AssetUpdate): Promise<void> {
+  const ref = doc(db, 'users', userId, 'assets', assetId);
+  const clean = stripUndefined(update);
+  await updateDoc(ref, { ...clean, updatedAt: getTimestamp() });
+}
+
+export async function firestoreDeleteAsset(userId: string, assetId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', userId, 'assets', assetId));
 }
 
 // Migration: upload localStorage data to Firestore

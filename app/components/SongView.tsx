@@ -55,6 +55,8 @@ interface SongViewProps {
   perfFontSize?: string;
   perfFontFamily?: string;
   metronomeSound?: MetronomeSound;
+  hidePerformanceHeader?: boolean;
+  hidePlayFab?: boolean;
 }
 
 interface FormState {
@@ -114,6 +116,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   perfFontSize,
   perfFontFamily,
   metronomeSound = 'default',
+  hidePerformanceHeader = false,
+  hidePlayFab = false,
 }, ref) {
   const { authState, user } = useAuth();
   const { toast } = useToast();
@@ -674,6 +678,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           hasBackingTrack={hasBackingTrack}
           backingTrackControls={backingTrackControls}
           countInBars={countInBars}
+          hideHeader={hidePerformanceHeader}
+          hidePlayFab={hidePlayFab}
         />
       ) : (
         <EditMode

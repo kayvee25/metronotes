@@ -156,10 +156,8 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
 
   return (
     <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
-        <h1 className="text-xl font-bold text-[var(--foreground)]">Songs</h1>
-        <div className="flex items-center gap-1">
+      {/* Toolbar */}
+      <div className="flex items-center justify-end px-4 py-2 gap-1">
         <button
           onClick={refresh}
           className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
@@ -197,8 +195,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
             </div>
           )}
         </div>
-        </div>
-      </header>
+      </div>
 
       {/* Error banner */}
       {error && (

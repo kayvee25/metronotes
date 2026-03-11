@@ -29,28 +29,29 @@ export function useAssetLinkage(songs: Song[]): { linkage: AssetLinkageMap; refr
     async function scan() {
       const map: AssetLinkageMap = {};
 
+      const addToMap = (assetId: string, songId: string, songName: string) => {
+        if (!map[assetId]) map[assetId] = [];
+        if (!map[assetId].some(l => l.songId === songId)) {
+          map[assetId].push({ songId, songName });
+        }
+      };
+
       if (isGuest) {
         for (const song of songs) {
           const attachments = storage.getAttachments(song.id);
           for (const att of attachments) {
-            if (att.assetId) {
-              if (!map[att.assetId]) map[att.assetId] = [];
-              if (!map[att.assetId].some(l => l.songId === song.id)) {
-                map[att.assetId].push({ songId: song.id, songName: song.name });
-              }
-            }
+            if (att.assetId) addToMap(att.assetId, song.id, song.name);
           }
         }
       } else if (userId) {
-        for (const song of songs) {
-          const attachments = await firestoreGetAttachments(userId, song.id);
-          for (const att of attachments) {
-            if (att.assetId) {
-              if (!map[att.assetId]) map[att.assetId] = [];
-              if (!map[att.assetId].some(l => l.songId === song.id)) {
-                map[att.assetId].push({ songId: song.id, songName: song.name });
-              }
-            }
+        const results = await Promise.all(
+          songs.map(song =>
+            firestoreGetAttachments(userId, song.id).then(atts => ({ song, atts }))
+          )
+        );
+        for (const { song, atts } of results) {
+          for (const att of atts) {
+            if (att.assetId) addToMap(att.assetId, song.id, song.name);
           }
         }
       }
@@ -58,7 +59,9 @@ export function useAssetLinkage(songs: Song[]): { linkage: AssetLinkageMap; refr
       if (!cancelled) setLinkage(map);
     }
 
-    scan();
+    scan().catch(() => {
+      // Linkage is supplementary info — silently fail
+    });
     return () => { cancelled = true; };
   }, [authState, isGuest, userId, songs, version]);
 

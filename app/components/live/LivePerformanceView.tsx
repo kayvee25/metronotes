@@ -97,7 +97,6 @@ export default function LivePerformanceView({
   const handleChangeAudioMode = (mode: 'metronome' | 'backingtrack' | 'off') => ref.current?.changeAudioMode(mode);
   const handleBtPlay = () => ref.current?.btPlay();
   const handleBtPause = () => ref.current?.btPause();
-  const handleBtStop = () => ref.current?.btStop();
   const handleBtSeek = (time: number) => ref.current?.btSeek(time);
   const handleBtSetVolume = (vol: number) => ref.current?.btSetVolume(vol);
 
@@ -139,7 +138,6 @@ export default function LivePerformanceView({
         onChangeAudioMode={handleChangeAudioMode}
         onBtPlay={handleBtPlay}
         onBtPause={handleBtPause}
-        onBtStop={handleBtStop}
         onBtSeek={handleBtSeek}
         onBtSetVolume={handleBtSetVolume}
       />

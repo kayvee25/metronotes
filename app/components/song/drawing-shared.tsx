@@ -69,6 +69,14 @@ export function useZoomPan() {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
+  // Refs for reading current values in callbacks without nested setState
+  const zoomRef = useRef(zoom);
+  const panXRef = useRef(panX);
+  const panYRef = useRef(panY);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { panXRef.current = panX; }, [panX]);
+  useEffect(() => { panYRef.current = panY; }, [panY]);
+
   const setContentSize = useCallback((w: number, h: number) => {
     contentSizeRef.current = { width: w, height: h };
   }, []);
@@ -125,18 +133,9 @@ export function useZoomPan() {
         return newZoom;
       });
     } else {
-      setPanX(prevPanX => {
-        setPanY(prevPanY => {
-          setZoom(prevZoom => {
-            const [cx, cy] = clampPan(prevPanX - e.deltaX, prevPanY - e.deltaY, prevZoom);
-            setPanX(cx);
-            setPanY(cy);
-            return prevZoom;
-          });
-          return prevPanY;
-        });
-        return prevPanX;
-      });
+      const [cx, cy] = clampPan(panXRef.current - e.deltaX, panYRef.current - e.deltaY, zoomRef.current);
+      setPanX(cx);
+      setPanY(cy);
     }
   }, [clampPan]);
 

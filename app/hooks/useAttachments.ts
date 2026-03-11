@@ -18,6 +18,23 @@ import { removeCachedBlob, downloadAndCache } from '../lib/offline-cache';
 import { getGuestBlob, deleteGuestBlob } from '../lib/guest-blob-storage';
 import { generateId, getTimestamp } from '../lib/utils';
 
+/** Shared helper: create attachment + asset in parallel, then link them */
+async function createLinkedAttachmentAndAsset(
+  userId: string,
+  songId: string,
+  attachmentInput: AttachmentInput,
+  assetInput: AssetInput,
+): Promise<{ attachment: Attachment; assetId: string }> {
+  const [attachment, asset] = await Promise.all([
+    firestoreCreateAttachment(userId, songId, attachmentInput),
+    firestoreCreateAsset(userId, assetInput),
+  ]);
+  await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id }).catch((err) => {
+    console.error('Failed to link asset to attachment:', err);
+  });
+  return { attachment: { ...attachment, assetId: asset.id }, assetId: asset.id };
+}
+
 export function useAttachments(songId: string | null, onError?: (message: string) => void) {
   const { user, authState } = useAuth();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -134,7 +151,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return attachment;
     }
 
-    // Firestore: create attachment first, then asset in background
+    // Firestore: create attachment + asset in parallel
     const input: AttachmentInput = {
       type: 'richtext',
       order: attachments.length,
@@ -142,20 +159,14 @@ export function useAttachments(songId: string | null, onError?: (message: string
       content: richContent,
     };
 
-    const tempId = crypto.randomUUID();
+    const tempId = generateId();
     const now = new Date().toISOString();
     const tempAttachment: Attachment = { ...input, id: tempId, createdAt: now, updatedAt: now };
     setAttachments(prev => [...prev, tempAttachment]);
 
     if (userId) {
-      const sid = songId;
-      const uid = userId;
-      Promise.all([
-        firestoreCreateAttachment(uid, sid, input),
-        firestoreCreateAsset(uid, assetInput),
-      ]).then(([attachment, asset]) => {
-        firestoreUpdateAttachment(uid, sid, attachment.id, { assetId: asset.id }).catch(() => {});
-        setAttachments(prev => prev.map(a => a.id === tempId ? { ...attachment, assetId: asset.id } : a));
+      createLinkedAttachmentAndAsset(userId, songId, input, assetInput).then(({ attachment }) => {
+        setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
       }).catch(() => {
         setAttachments(prev => prev.filter(a => a.id !== tempId));
         onErrorRef.current?.("Can't save — check your internet connection.");
@@ -195,7 +206,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
     }
 
     // Optimistic create
-    const tempId = crypto.randomUUID();
+    const tempId = generateId();
     const now = new Date().toISOString();
     const tempAttachment: Attachment = { ...input, id: tempId, createdAt: now, updatedAt: now };
     setAttachments(prev => [...prev, tempAttachment]);
@@ -203,14 +214,9 @@ export function useAttachments(songId: string | null, onError?: (message: string
     if (userId) {
       try {
         if (assetInput) {
-          const [attachment, asset] = await Promise.all([
-            firestoreCreateAttachment(userId, songId, input),
-            firestoreCreateAsset(userId, assetInput),
-          ]);
-          await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id });
-          const withAsset = { ...attachment, assetId: asset.id };
-          setAttachments(prev => prev.map(a => a.id === tempId ? withAsset : a));
-          return withAsset;
+          const { attachment } = await createLinkedAttachmentAndAsset(userId, songId, input, assetInput);
+          setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
+          return attachment;
         } else {
           const attachment = await firestoreCreateAttachment(userId, songId, input);
           setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { TransportState, AudioMode } from '../SongView';
 import { Attachment } from '../../types';
 import { BPM } from '../../lib/constants';
@@ -14,7 +14,6 @@ interface TransportControlsProps {
   onChangeAudioMode: (mode: AudioMode) => void;
   onBtPlay: () => void;
   onBtPause: () => void;
-  onBtStop: () => void;
   onBtSeek: (time: number) => void;
   onBtSetVolume: (vol: number) => void;
 }
@@ -24,6 +23,40 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
+
+/** Isolated beat button — only re-renders when beat state changes */
+const BeatButton = memo(function BeatButton({
+  isPlaying, isBeating, currentBeat, onTogglePlay,
+}: {
+  isPlaying: boolean; isBeating: boolean; currentBeat: number; onTogglePlay: () => void;
+}) {
+  return (
+    <button
+      onClick={onTogglePlay}
+      className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-75 active:scale-90 ${
+        isPlaying && isBeating && currentBeat === 0
+          ? 'bg-red-500 text-white scale-110 shadow-[0_0_14px_rgba(239,68,68,0.5)]'
+          : isPlaying && isBeating
+          ? 'bg-yellow-500 text-white scale-105 shadow-[0_0_12px_rgba(234,179,8,0.5)]'
+          : isPlaying
+          ? 'bg-[var(--accent)] text-white shadow-md'
+          : 'bg-[var(--accent)] text-white shadow-md'
+      }`}
+      aria-label={isPlaying ? 'Stop' : 'Play'}
+    >
+      {isPlaying ? (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <rect x="6" y="5" width="4" height="14" rx="1" />
+          <rect x="14" y="5" width="4" height="14" rx="1" />
+        </svg>
+      ) : (
+        <svg className="w-4.5 h-4.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      )}
+    </button>
+  );
+});
 
 type SourceOption = { type: 'metronome' } | { type: 'none' } | { type: 'audio'; attachment: Attachment };
 
@@ -109,16 +142,14 @@ export default function TransportControls({
 
   // Reusable source icons
   const metronomeIcon = (className: string) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      {/* Metronome body — trapezoid with fill */}
-      <path d="M8 21h8l-2-16h-4L8 21z" fill="currentColor" opacity={0.15} />
-      <path d="M8 21h8l-2-16h-4L8 21z" />
-      {/* Tick marks on face */}
-      <path d="M10.5 17h3" strokeWidth={1.5} opacity={0.5} />
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      {/* Metronome body */}
+      <path d="M8 22h8l-2.5-17h-3L8 22z" opacity={0.15} />
+      <path d="M8 22h8l-2.5-17h-3L8 22z" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
       {/* Pendulum arm */}
-      <path d="M12 15l4-10" strokeWidth={2.5} />
+      <line x1="12" y1="14" x2="15.5" y2="4.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
       {/* Pendulum weight */}
-      <circle cx="15.5" cy="6.5" r="2" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="3.5" r="1.8" />
     </svg>
   );
 
@@ -285,30 +316,12 @@ export default function TransportControls({
 
           {/* Play/Stop button — blinks red on beat 1, amber on other beats */}
           <div className="w-20 flex-shrink-0 flex justify-end">
-            <button
-              onClick={onTogglePlay}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-75 active:scale-90 ${
-                isPlaying && isBeating && currentBeat === 0
-                  ? 'bg-red-500 text-white scale-110 shadow-[0_0_14px_rgba(239,68,68,0.5)]'
-                  : isPlaying && isBeating
-                  ? 'bg-yellow-500 text-white scale-105 shadow-[0_0_12px_rgba(234,179,8,0.5)]'
-                  : isPlaying
-                  ? 'bg-[var(--accent)] text-white shadow-md'
-                  : 'bg-[var(--accent)] text-white shadow-md'
-              }`}
-              aria-label={isPlaying ? 'Stop' : 'Play'}
-            >
-              {isPlaying ? (
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="5" width="4" height="14" rx="1" />
-                  <rect x="14" y="5" width="4" height="14" rx="1" />
-                </svg>
-              ) : (
-                <svg className="w-4.5 h-4.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
+            <BeatButton
+              isPlaying={isPlaying}
+              isBeating={isBeating}
+              currentBeat={currentBeat}
+              onTogglePlay={onTogglePlay}
+            />
           </div>
         </div>
       </div>

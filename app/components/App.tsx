@@ -56,7 +56,11 @@ function AppInner() {
   useEffect(() => {
     if (isGuest && !songsLoading && songs.length > 0 && !guestAssetMigrationDone.current) {
       guestAssetMigrationDone.current = true;
-      migrateGuestAttachmentsToAssets(songs);
+      try {
+        migrateGuestAttachmentsToAssets(songs);
+      } catch {
+        // Non-critical — migration is idempotent, will retry next load
+      }
     }
   }, [isGuest, songsLoading, songs]);
 
@@ -262,6 +266,7 @@ function AppInner() {
   const handleDeleteAsset = async (id: string) => {
     // Cascade: clear assetId from all attachments referencing this asset
     const links = assetLinkage[id] || [];
+    let cascadeErrors = 0;
     if (isGuest) {
       for (const link of links) {
         const attachments = storage.getAttachments(link.songId);
@@ -277,11 +282,16 @@ function AppInner() {
         const attachments = await firestoreGetAttachments(user.uid, link.songId);
         for (const att of attachments) {
           if (att.assetId === id) {
-            // Use deleteField() to remove the field from Firestore (undefined is rejected)
-            await firestoreUpdateAttachment(user.uid, link.songId, att.id, { assetId: deleteField() as unknown as string }).catch(() => {});
+            await firestoreUpdateAttachment(user.uid, link.songId, att.id, { assetId: deleteField() as unknown as string }).catch((err) => {
+              console.error('Failed to unlink asset from attachment:', err);
+              cascadeErrors++;
+            });
           }
         }
       }
+    }
+    if (cascadeErrors > 0) {
+      toast(`${cascadeErrors} attachment(s) could not be unlinked. They may still reference the deleted file.`);
     }
     deleteAsset(id);
     refreshAssetLinkage();
@@ -421,9 +431,13 @@ export default function App() {
         }
       }
 
-      // Migrate existing attachments to assets (idempotent)
-      const songs = await firestoreGetSongs(authValue.user!.uid);
-      await migrateAttachmentsToAssets(authValue.user!.uid, songs);
+      // Migrate existing attachments to assets (idempotent, skip if already done)
+      const migrationDone = localStorage.getItem('metronotes_asset_migration_done') === 'true';
+      if (!migrationDone) {
+        const songs = await firestoreGetSongs(authValue.user!.uid);
+        await migrateAttachmentsToAssets(authValue.user!.uid, songs);
+        localStorage.setItem('metronotes_asset_migration_done', 'true');
+      }
 
       setMigrationState('done');
     };

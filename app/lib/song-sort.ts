@@ -18,9 +18,9 @@ export function sortSongs(songs: Song[], sort: SongSortOption): Song[] {
     case 'bpm-high':
       return sorted.sort((a, b) => b.bpm - a.bpm);
     case 'recent-added':
-      return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     case 'recent-updated':
-      return sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      return sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     default:
       return sorted;
   }

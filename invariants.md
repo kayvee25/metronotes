@@ -92,7 +92,7 @@ System-wide behaviors that span multiple features. Every new spec MUST be checke
 
 ## Navigation
 
-**Song view** opens on top of tab content, managed via `showSongView` state in App.tsx. Back navigation checks dirty state.
+**Song view** opens in the Live tab when a song is selected, managed via `activeSong` state in App.tsx. Back navigation checks dirty state. Bottom nav is hidden when in Live mode with an active song.
 
 **Android back button:** `history.pushState` + `popstate` listener. Must be maintained for any new overlay/modal that should intercept back.
 

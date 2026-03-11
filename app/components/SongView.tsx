@@ -167,7 +167,6 @@ export interface SongViewHandle {
   changeAudioMode: (mode: AudioMode) => void;
   btPlay: () => void;
   btPause: () => void;
-  btStop: () => void;
   btSeek: (time: number) => void;
   btSetVolume: (vol: number) => void;
   switchToEdit: () => void;
@@ -270,12 +269,10 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   // Notify parent of initial mode
   const onModeChangeRef = useRef(onModeChange);
   onModeChangeRef.current = onModeChange;
-  const initialModeNotifiedRef = useRef(false);
-  if (!initialModeNotifiedRef.current) {
-    initialModeNotifiedRef.current = true;
-    // Defer to avoid setState during render in parent
-    Promise.resolve().then(() => onModeChangeRef.current?.(formState.mode));
-  }
+  useEffect(() => {
+    onModeChangeRef.current?.(formState.mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally run once on mount
 
   // Reset audioMode/countInBars on song change
   const prevSongIdForAudioRef = useRef(song?.id);
@@ -816,7 +813,6 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     changeAudioMode: handleAudioModeChange,
     btPlay: () => bt.play(countInBars, bpm, timeSignature),
     btPause: bt.pause,
-    btStop: bt.stop,
     btSeek: bt.seek,
     btSetVolume: bt.setVolume,
     switchToEdit: () => setMode('edit'),

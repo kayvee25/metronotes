@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Asset, AssetInput, AssetUpdate } from '../types';
 import { storage } from '../lib/storage';
 import { useAuth } from './useAuth';
@@ -121,9 +121,10 @@ export function useAssets(onError?: (message: string) => void): UseAssetsReturn 
     }
   }, [assets, isGuest, userId]);
 
+  const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a])), [assets]);
   const getAssetById = useCallback((id: string): Asset | undefined => {
-    return assets.find(a => a.id === id);
-  }, [assets]);
+    return assetMap.get(id);
+  }, [assetMap]);
 
   return {
     assets,

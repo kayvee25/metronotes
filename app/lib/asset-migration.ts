@@ -5,6 +5,7 @@ import {
   firestoreUpdateAttachment,
 } from './firestore';
 import { storage } from './storage';
+import { generateId } from './utils';
 
 /**
  * Creates an AssetInput from an existing Attachment.
@@ -59,6 +60,10 @@ export function assetFromAttachment(attachment: Attachment): AssetInput {
         size: attachment.fileSize || attachment.cloudFileSize || null,
         storageUrl: attachment.storageUrl || null,
       };
+    default: {
+      const _exhaustive: never = attachment.type;
+      throw new Error(`Unknown attachment type: ${_exhaustive}`);
+    }
   }
 }
 
@@ -71,17 +76,15 @@ export async function migrateAttachmentsToAssets(
   songs: Song[],
   onProgress?: (current: number, total: number) => void,
 ): Promise<void> {
-  // Collect all attachments that need migration
-  const toMigrate: { songId: string; attachment: Attachment }[] = [];
-
-  for (const song of songs) {
-    const attachments = await firestoreGetAttachments(userId, song.id);
-    for (const att of attachments) {
-      if (!att.assetId && !att.cloudProvider) {
-        toMigrate.push({ songId: song.id, attachment: att });
-      }
-    }
-  }
+  // Collect all attachments that need migration (parallel fetch)
+  const allAttachments = await Promise.all(
+    songs.map(song =>
+      firestoreGetAttachments(userId, song.id).then(atts => ({ songId: song.id, atts }))
+    )
+  );
+  const toMigrate = allAttachments.flatMap(({ songId, atts }) =>
+    atts.filter(att => !att.assetId && !att.cloudProvider).map(att => ({ songId, attachment: att }))
+  );
 
   if (toMigrate.length === 0) return;
 
@@ -89,9 +92,13 @@ export async function migrateAttachmentsToAssets(
   let current = 0;
 
   for (const { songId, attachment } of toMigrate) {
-    const assetInput = assetFromAttachment(attachment);
-    const asset = await firestoreCreateAsset(userId, assetInput);
-    await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id });
+    try {
+      const assetInput = assetFromAttachment(attachment);
+      const asset = await firestoreCreateAsset(userId, assetInput);
+      await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id });
+    } catch {
+      // Skip failed items — migration is idempotent, will retry next load
+    }
     current++;
     onProgress?.(current, total);
   }
@@ -108,7 +115,7 @@ export function migrateGuestAttachmentsToAssets(songs: Song[]): void {
       if (!att.assetId && !att.cloudProvider) {
         const assetInput = assetFromAttachment(att);
         const now = new Date().toISOString();
-        const assetId = crypto.randomUUID();
+        const assetId = generateId();
         const asset: Asset = {
           ...assetInput,
           id: assetId,

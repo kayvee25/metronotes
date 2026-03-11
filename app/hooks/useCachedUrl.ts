@@ -18,11 +18,12 @@ export function useCachedUrl(
   storageUrl: string | undefined,
   isOnline: boolean,
   cloud?: { provider: string; fileId: string } | undefined,
-): { url: string | null; fromCache: boolean; loading: boolean } {
-  const [state, setState] = useState<{ url: string | null; fromCache: boolean; loading: boolean }>({
+): { url: string | null; fromCache: boolean; loading: boolean; needsReauth: boolean } {
+  const [state, setState] = useState<{ url: string | null; fromCache: boolean; loading: boolean; needsReauth: boolean }>({
     url: null,
     fromCache: false,
     loading: true,
+    needsReauth: false,
   });
 
   const cloudProvider = cloud?.provider;
@@ -34,7 +35,7 @@ export function useCachedUrl(
 
     if (!attachmentId || (!storageUrl && !cloudProvider)) {
       Promise.resolve().then(() => {
-        if (!cancelled) setState({ url: null, fromCache: false, loading: false });
+        if (!cancelled) setState({ url: null, fromCache: false, loading: false, needsReauth: false });
       });
       return () => { cancelled = true; };
     }
@@ -44,12 +45,12 @@ export function useCachedUrl(
 
       if (blob) {
         objectUrl = URL.createObjectURL(blob);
-        setState({ url: objectUrl, fromCache: true, loading: false });
+        setState({ url: objectUrl, fromCache: true, loading: false, needsReauth: false });
         return;
       }
 
       if (storageUrl && isOnline) {
-        setState({ url: storageUrl, fromCache: false, loading: false });
+        setState({ url: storageUrl, fromCache: false, loading: false, needsReauth: false });
         return;
       }
 
@@ -59,16 +60,19 @@ export function useCachedUrl(
           const cloudBlob = await fetchCloudBlob(cloudProvider, cloudFileId, attachmentId);
           if (cancelled) return;
           objectUrl = URL.createObjectURL(cloudBlob);
-          setState({ url: objectUrl, fromCache: false, loading: false });
-        } catch {
-          // Silent auth not available — user needs to interact with Drive first
-          if (!cancelled) setState({ url: null, fromCache: false, loading: false });
+          setState({ url: objectUrl, fromCache: false, loading: false, needsReauth: false });
+        } catch (err) {
+          // Check if failure is auth-related
+          const isAuth = err instanceof Error && (
+            err.message.includes('Not authorized') || err.message.includes('access denied')
+          );
+          if (!cancelled) setState({ url: null, fromCache: false, loading: false, needsReauth: isAuth });
         }
         return;
       }
 
       // Offline and not cached
-      setState({ url: null, fromCache: false, loading: false });
+      setState({ url: null, fromCache: false, loading: false, needsReauth: false });
     }).catch(() => {
       if (!cancelled) {
         // Fallback: use storageUrl if online, null if offline
@@ -76,6 +80,7 @@ export function useCachedUrl(
           url: isOnline ? (storageUrl || null) : null,
           fromCache: false,
           loading: false,
+          needsReauth: false,
         });
       }
     });

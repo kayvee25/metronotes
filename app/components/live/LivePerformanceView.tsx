@@ -8,6 +8,7 @@ import TransportControls from './TransportControls';
 import { Song, Setlist, SongInput } from '../../types';
 import { MetronomeSound } from '../../hooks/useMetronomeAudio';
 import { useToast } from '../ui/Toast';
+import { sortSongs, getSavedSortOption } from '../../lib/song-sort';
 
 interface LivePerformanceViewProps {
   song: Song;
@@ -50,27 +51,34 @@ export default function LivePerformanceView({
 
   const [transport, setTransport] = useState<TransportState | null>(null);
   const [isEditMode, setIsEditMode] = useState(initialEditMode);
+  const [editName, setEditName] = useState(song.name);
+  const [editArtist, setEditArtist] = useState(song.artist || '');
   const isDirtyRef = useRef(false);
 
   const handleTransportUpdate = useCallback((state: TransportState) => {
     setTransport(state);
   }, []);
 
-  const handleModeChange = useCallback((mode: 'performance' | 'edit') => {
+  const handleModeChange = (mode: 'performance' | 'edit') => {
     setIsEditMode(mode === 'edit');
-  }, []);
+    if (mode === 'edit' && ref.current) {
+      setEditName(ref.current.getName());
+      setEditArtist(ref.current.getArtist());
+    }
+  };
 
-  // Build queue
+  // Build queue — match library sort order for non-setlist mode
+  const sortedSongs = setlist ? songs : sortSongs(songs, getSavedSortOption());
   const queue: QueueSong[] = setlist
     ? setlist.songIds
         .map(id => songs.find(s => s.id === id))
         .filter((s): s is Song => s != null)
         .map(s => ({ id: s.id, name: s.name, artist: s.artist }))
-    : songs.map(s => ({ id: s.id, name: s.name, artist: s.artist }));
+    : sortedSongs.map(s => ({ id: s.id, name: s.name, artist: s.artist }));
 
   const currentIndex = setlist
     ? songIndex
-    : songs.findIndex(s => s.id === song.id);
+    : sortedSongs.findIndex(s => s.id === song.id);
 
   const handleSelectFromQueue = (index: number) => {
     const queueSong = queue[index];
@@ -141,8 +149,8 @@ export default function LivePerformanceView({
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto w-full">
       <LiveHeader
-        songName={song.name}
-        artist={song.artist}
+        songName={isEditMode ? editName : song.name}
+        artist={isEditMode ? editArtist : song.artist}
         queue={queue}
         currentIndex={currentIndex}
         onSelectFromQueue={handleSelectFromQueue}
@@ -150,6 +158,8 @@ export default function LivePerformanceView({
         transportSlot={transportSlot}
         isEditMode={isEditMode}
         onToggleEditMode={handleToggleEditMode}
+        onNameChange={(name) => { setEditName(name); ref.current?.changeName(name); }}
+        onArtistChange={(artist) => { setEditArtist(artist); ref.current?.changeArtist(artist); }}
       />
 
       <div className="flex-1 overflow-hidden">
@@ -170,7 +180,6 @@ export default function LivePerformanceView({
           perfFontFamily={perfFontFamily}
           metronomeSound={metronomeSound}
           hidePerformanceHeader
-          hidePlayFab
           onTransportUpdate={handleTransportUpdate}
           onModeChange={handleModeChange}
         />

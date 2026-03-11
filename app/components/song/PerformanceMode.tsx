@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Song, Setlist, Attachment } from '../../types';
 import { ANIMATION } from '../../lib/constants';
-import PlayFAB from '../ui/PlayFAB';
+
 import PageDots from '../ui/PageDots';
 import AttachmentPage from './AttachmentPage';
 
@@ -14,41 +14,16 @@ interface PerformanceModeProps {
   musicalKey: string;
   bpm: number;
   timeSignature: string;
-  isPlaying: boolean;
-  currentBeat: number;
-  isBeating: boolean;
   setlist?: Setlist | null;
   songIndex: number;
   showBack: boolean;
   onBack: () => void;
   onPrevSong?: () => void;
   onNextSong?: () => void;
-  onTogglePlay: () => void;
-  onBpmChange: (bpm: number) => void;
   onSwitchToEdit: () => void;
   perfFontSize?: string;
   perfFontFamily?: string;
-  isMuted?: boolean;
-  onToggleMute?: () => void;
-  audioMode?: 'metronome' | 'backingtrack' | 'off';
-  onAudioModeChange?: (mode: 'metronome' | 'backingtrack' | 'off') => void;
-  hasBackingTrack?: boolean;
-  backingTrackControls?: {
-    isPlaying: boolean;
-    isCountingIn: boolean;
-    currentTime: number;
-    duration: number;
-    buffered: number;
-    volume: number;
-    onPlay: () => void;
-    onPause: () => void;
-    onStop: () => void;
-    onSeek: (time: number) => void;
-    onVolumeChange: (vol: number) => void;
-  };
-  countInBars?: number;
   hideHeader?: boolean;
-  hidePlayFab?: boolean;
 }
 
 export default function PerformanceMode({
@@ -58,29 +33,16 @@ export default function PerformanceMode({
   musicalKey,
   bpm,
   timeSignature,
-  isPlaying,
-  currentBeat,
-  isBeating,
   setlist,
   songIndex,
   showBack,
   onBack,
   onPrevSong,
   onNextSong,
-  onTogglePlay,
-  onBpmChange,
   onSwitchToEdit,
   perfFontSize = 'md',
   perfFontFamily = 'mono',
-  isMuted = false,
-  onToggleMute,
-  audioMode,
-  onAudioModeChange,
-  hasBackingTrack,
-  backingTrackControls,
-  countInBars,
   hideHeader = false,
-  hidePlayFab = false,
 }: PerformanceModeProps) {
   const hasPrev = setlist && songIndex > 0;
   const hasNext = setlist && songIndex < (setlist.songIds.length - 1);
@@ -258,24 +220,6 @@ export default function PerformanceMode({
 
       </div>
 
-      {/* Floating play FAB — hidden when using LiveHeader transport */}
-      {!hidePlayFab && (
-        <PlayFAB
-          bpm={bpm}
-          isPlaying={isPlaying}
-          currentBeat={currentBeat}
-          isBeating={isBeating}
-          isMuted={isMuted}
-          onTogglePlay={onTogglePlay}
-          onBpmChange={onBpmChange}
-          onToggleMute={onToggleMute}
-          audioMode={audioMode}
-          onAudioModeChange={onAudioModeChange}
-          hasBackingTrack={hasBackingTrack}
-          backingTrackControls={backingTrackControls}
-          countInBars={countInBars}
-        />
-      )}
     </div>
   );
 }

@@ -12,6 +12,8 @@ import {
   firestoreUpdateSong,
   firestoreDeleteSong,
   firestoreDeleteAllAttachments,
+  firestoreGetAttachments,
+  firestoreDeleteAsset,
 } from '../lib/firestore';
 
 export function useSongs(onError?: (message: string) => void) {
@@ -93,7 +95,7 @@ export function useSongs(onError?: (message: string) => void) {
       });
     }
     return tempSong;
-  }, [isGuest, userId]);
+  }, [isGuest, userId, songs.length]);
 
   const updateSong = useCallback((id: string, update: SongUpdate): Song | null => {
     if (isGuest) {
@@ -121,8 +123,14 @@ export function useSongs(onError?: (message: string) => void) {
     return updated;
   }, [isGuest, userId]);
 
-  const deleteSong = useCallback((id: string): boolean => {
+  const deleteSong = useCallback((id: string, keepFiles: boolean = false): boolean => {
     if (isGuest) {
+      const attachments = storage.getAttachments(id);
+      if (!keepFiles) {
+        for (const att of attachments) {
+          if (att.assetId) storage.deleteAsset(att.assetId);
+        }
+      }
       storage.deleteAllAttachments(id);
       deleteAllGuestBlobs(id); // Clean up IndexedDB binary files
       const result = storage.deleteSong(id);
@@ -134,9 +142,15 @@ export function useSongs(onError?: (message: string) => void) {
     setSongs(prev => prev.filter(s => s.id !== id));
 
     if (userId) {
-      // Delete attachments first, then the song
-      firestoreDeleteAllAttachments(userId, id)
-        .then(() => firestoreDeleteSong(userId, id))
+      firestoreGetAttachments(userId, id)
+        .then(async (attachments) => {
+          if (!keepFiles) {
+            const assetIds = attachments.map(a => a.assetId).filter((id): id is string => !!id);
+            await Promise.all(assetIds.map(assetId => firestoreDeleteAsset(userId, assetId).catch(() => {})));
+          }
+          await firestoreDeleteAllAttachments(userId, id);
+          await firestoreDeleteSong(userId, id);
+        })
         .catch(() => {
           onErrorRef.current?.("Can't delete — check your internet connection.");
           firestoreGetSongs(userId).then(setSongs).catch(() => {});

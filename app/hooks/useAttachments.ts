@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Attachment, AttachmentInput, AttachmentUpdate } from '../types';
+import { Attachment, AttachmentInput, AttachmentUpdate, AssetInput } from '../types';
 import { storage } from '../lib/storage';
 import { useAuth } from './useAuth';
 import {
@@ -11,10 +11,12 @@ import {
   firestoreDeleteAttachment,
   firestoreDeleteAllAttachments,
   firestoreReorderAttachments,
+  firestoreCreateAsset,
 } from '../lib/firestore';
 import { deleteAttachmentFile } from '../lib/storage-firebase';
 import { removeCachedBlob, downloadAndCache } from '../lib/offline-cache';
 import { getGuestBlob, deleteGuestBlob } from '../lib/guest-blob-storage';
+import { generateId, getTimestamp } from '../lib/utils';
 
 export function useAttachments(songId: string | null, onError?: (message: string) => void) {
   const { user, authState } = useAuth();
@@ -104,28 +106,56 @@ export function useAttachments(songId: string | null, onError?: (message: string
   const addRichText = useCallback((content?: object): Attachment => {
     if (!songId) throw new Error('No song selected');
 
-    const input: AttachmentInput = {
+    const richContent = content || { type: 'doc', content: [{ type: 'paragraph' }] };
+
+    const assetInput: AssetInput = {
+      name: 'Rich text',
       type: 'richtext',
-      order: attachments.length,
-      isDefault: attachments.length === 0,
-      content: content || { type: 'doc', content: [{ type: 'paragraph' }] },
+      mimeType: 'application/json',
+      size: null,
+      storageUrl: null,
+      content: richContent,
     };
 
     if (isGuest) {
+      const assetId = generateId();
+      const now = getTimestamp();
+      storage.createAsset({ ...assetInput, id: assetId, createdAt: now, updatedAt: now });
+
+      const input: AttachmentInput = {
+        type: 'richtext',
+        order: attachments.length,
+        isDefault: attachments.length === 0,
+        content: richContent,
+        assetId,
+      };
       const attachment = storage.createAttachment(songId, input);
       setAttachments(storage.getAttachments(songId));
       return attachment;
     }
 
-    // Optimistic create
+    // Firestore: create attachment first, then asset in background
+    const input: AttachmentInput = {
+      type: 'richtext',
+      order: attachments.length,
+      isDefault: attachments.length === 0,
+      content: richContent,
+    };
+
     const tempId = crypto.randomUUID();
     const now = new Date().toISOString();
     const tempAttachment: Attachment = { ...input, id: tempId, createdAt: now, updatedAt: now };
     setAttachments(prev => [...prev, tempAttachment]);
 
     if (userId) {
-      firestoreCreateAttachment(userId, songId, input).then((attachment) => {
-        setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
+      const sid = songId;
+      const uid = userId;
+      Promise.all([
+        firestoreCreateAttachment(uid, sid, input),
+        firestoreCreateAsset(uid, assetInput),
+      ]).then(([attachment, asset]) => {
+        firestoreUpdateAttachment(uid, sid, attachment.id, { assetId: asset.id }).catch(() => {});
+        setAttachments(prev => prev.map(a => a.id === tempId ? { ...attachment, assetId: asset.id } : a));
       }).catch(() => {
         setAttachments(prev => prev.filter(a => a.id !== tempId));
         onErrorRef.current?.("Can't save — check your internet connection.");
@@ -138,8 +168,28 @@ export function useAttachments(songId: string | null, onError?: (message: string
   const addImage = useCallback(async (input: AttachmentInput): Promise<Attachment> => {
     if (!songId) throw new Error('No song selected');
 
+    // Cloud-linked files are externally hosted — no asset created
+    const isCloudLinked = !!input.cloudProvider;
+
+    // Build asset from the attachment input (skip for cloud-linked)
+    const assetInput: AssetInput | null = isCloudLinked ? null : {
+      name: input.name || input.fileName || `${input.type} attachment`,
+      type: input.type as 'image' | 'pdf' | 'audio' | 'drawing',
+      mimeType: input.cloudMimeType || (input.type === 'pdf' ? 'application/pdf' : input.type === 'audio' ? 'audio/mpeg' : 'image/jpeg'),
+      size: input.fileSize || input.cloudFileSize || null,
+      storageUrl: input.storageUrl || null,
+      ...(input.type === 'drawing' && input.drawingData ? { drawingData: input.drawingData } : {}),
+    };
+
     if (isGuest) {
-      const attachment = storage.createAttachment(songId, input);
+      let assetId: string | undefined;
+      if (assetInput) {
+        assetId = generateId();
+        const now = getTimestamp();
+        storage.createAsset({ ...assetInput, id: assetId, createdAt: now, updatedAt: now });
+      }
+
+      const attachment = storage.createAttachment(songId, { ...input, ...(assetId ? { assetId } : {}) });
       setAttachments(storage.getAttachments(songId));
       return attachment;
     }
@@ -152,10 +202,22 @@ export function useAttachments(songId: string | null, onError?: (message: string
 
     if (userId) {
       try {
-        const attachment = await firestoreCreateAttachment(userId, songId, input);
-        setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
-        return attachment;
-      } catch {
+        if (assetInput) {
+          const [attachment, asset] = await Promise.all([
+            firestoreCreateAttachment(userId, songId, input),
+            firestoreCreateAsset(userId, assetInput),
+          ]);
+          await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id });
+          const withAsset = { ...attachment, assetId: asset.id };
+          setAttachments(prev => prev.map(a => a.id === tempId ? withAsset : a));
+          return withAsset;
+        } else {
+          const attachment = await firestoreCreateAttachment(userId, songId, input);
+          setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
+          return attachment;
+        }
+      } catch (err) {
+        console.error('addImage failed:', err);
         setAttachments(prev => prev.filter(a => a.id !== tempId));
         onErrorRef.current?.("Can't save — check your internet connection.");
         throw new Error('Upload failed');
@@ -180,7 +242,8 @@ export function useAttachments(songId: string | null, onError?: (message: string
     ));
 
     if (userId) {
-      firestoreUpdateAttachment(userId, songId, attachmentId, update).catch(() => {
+      firestoreUpdateAttachment(userId, songId, attachmentId, update).catch((err) => {
+        console.error('Attachment update failed:', err);
         onErrorRef.current?.("Can't save — check your internet connection.");
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });

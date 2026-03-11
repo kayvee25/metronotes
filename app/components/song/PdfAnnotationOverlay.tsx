@@ -1,11 +1,14 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import getStroke from 'perfect-freehand';
 import { AnnotationLayer, Stroke } from '../../types';
 import { useDrawing, DRAWING_COLORS, DrawingColor } from '../../hooks/useDrawing';
 import { loadPdfJs } from '../../lib/pdf-loader';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import {
+  hitTest, pinchDistance, pinchCenter,
+  MIN_ZOOM, MAX_ZOOM, ClearConfirmDialog, DrawingHeader, StrokeRenderer,
+} from './drawing-shared';
 
 interface PdfAnnotationOverlayProps {
   isOpen: boolean;
@@ -15,55 +18,6 @@ interface PdfAnnotationOverlayProps {
   onSave: (pageAnnotations: Record<number, AnnotationLayer>) => void;
   title?: string;
 }
-
-function getSvgPathFromStroke(stroke: number[][]) {
-  if (!stroke.length) return '';
-  const d = stroke.reduce(
-    (acc, [x0, y0], i, arr) => {
-      const [x1, y1] = arr[(i + 1) % arr.length];
-      acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-      return acc;
-    },
-    ['M', ...stroke[0], 'Q']
-  );
-  d.push('Z');
-  return d.join(' ');
-}
-
-function renderStrokeToPath(points: Array<[number, number, number]>): string {
-  const outlinePoints = getStroke(points, {
-    size: 4,
-    thinning: 0.5,
-    smoothing: 0.5,
-    streamline: 0.5,
-  });
-  return getSvgPathFromStroke(outlinePoints);
-}
-
-function hitTest(x: number, y: number, strokes: Stroke[], threshold: number = 20): string | null {
-  for (let i = strokes.length - 1; i >= 0; i--) {
-    const stroke = strokes[i];
-    for (const [px, py] of stroke.points) {
-      const dx = x - px;
-      const dy = y - py;
-      if (dx * dx + dy * dy < threshold * threshold) {
-        return stroke.id;
-      }
-    }
-  }
-  return null;
-}
-
-function pinchDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-function pinchCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
-
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 5;
 
 // Inner component that manages drawing state per page — remounted via key
 interface PageDrawingHandle {
@@ -243,8 +197,6 @@ const PageDrawing = forwardRef<PageDrawingHandle, PageDrawingProps>(
       }
     }, [endStroke]);
 
-    const currentPath = currentPoints.length >= 2 ? renderStrokeToPath(currentPoints) : '';
-
     return (
       <svg
         ref={svgRef}
@@ -258,17 +210,7 @@ const PageDrawing = forwardRef<PageDrawingHandle, PageDrawingProps>(
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        {strokes.map((stroke) => (
-          <path
-            key={stroke.id}
-            d={renderStrokeToPath(stroke.points)}
-            fill={stroke.color}
-            opacity={activeTool === 'eraser' ? 0.7 : 1}
-          />
-        ))}
-        {currentPath && (
-          <path d={currentPath} fill={activeColor} />
-        )}
+        <StrokeRenderer strokes={strokes} currentPoints={currentPoints} activeColor={activeColor} activeTool={activeTool} />
       </svg>
     );
   }
@@ -485,7 +427,7 @@ export default function PdfAnnotationOverlay({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col items-center justify-center max-w-3xl mx-auto">
         <svg className="w-6 h-6 text-[var(--muted)] animate-spin mb-2" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
           <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
@@ -496,28 +438,14 @@ export default function PdfAnnotationOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col">
-      {/* Header */}
-      <header className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-        <button
-          onClick={handleBack}
-          className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
-          aria-label="Back"
-        >
-          <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="text-center">
-          <h2 className="text-lg font-bold text-[var(--foreground)]">{title}</h2>
-          {totalPages > 1 && (
-            <p className="text-xs text-[var(--muted)]">
-              Page {currentPage + 1} of {totalPages}
-            </p>
-          )}
-        </div>
-        <div className="w-10" /> {/* Spacer for centering */}
-      </header>
+    <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col max-w-3xl mx-auto">
+      <DrawingHeader
+        title={title}
+        onBack={handleBack}
+        trailing={totalPages > 1 ? (
+          <span className="text-xs text-[var(--muted)] w-10 text-center">{currentPage + 1}/{totalPages}</span>
+        ) : undefined}
+      />
 
       {/* Page navigation for multi-page PDFs */}
       {totalPages > 1 && (
@@ -686,29 +614,12 @@ export default function PdfAnnotationOverlay({
         </div>
       )}
 
-      {/* Clear confirmation */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-[var(--background)] rounded-2xl p-6 max-w-sm w-full shadow-xl border border-[var(--border)]">
-            <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">Clear page annotations?</h3>
-            <p className="text-sm text-[var(--muted)] mb-4">This will remove all strokes on this page.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--card)] text-[var(--foreground)] font-medium active:scale-95 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => { toolbarState?.clearAll(); setShowClearConfirm(false); }}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--accent-danger)] text-white font-medium active:scale-95 transition-all"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ClearConfirmDialog
+        isOpen={showClearConfirm}
+        onCancel={() => setShowClearConfirm(false)}
+        onConfirm={() => { toolbarState?.clearAll(); setShowClearConfirm(false); }}
+        label="strokes on this page"
+      />
     </div>
   );
 }

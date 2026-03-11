@@ -7,6 +7,7 @@ import { FontSize, FontFamily } from '../hooks/usePerformanceSettings';
 import { MetronomeSound } from '../hooks/useMetronomeAudio';
 import { getCacheSize, clearAllCache } from '../lib/offline-cache';
 import { useToast } from './ui/Toast';
+import { getProvider } from '../lib/cloud-providers';
 
 const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: 'sm', label: 'Small' },
@@ -175,12 +176,31 @@ export default function Settings({
                 <p className="text-sm text-[var(--muted)] truncate">{user?.email}</p>
               </div>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="w-full h-11 rounded-xl bg-[var(--accent-danger)]/10 text-[var(--accent-danger)] font-semibold hover:bg-[var(--accent-danger)]/20 active:scale-95 transition-all text-sm"
-            >
-              Sign Out
-            </button>
+            <div className="flex gap-2">
+              {getProvider('google-drive') && user?.providerData?.some(p => p.providerId === 'google.com') && (
+                <button
+                  onClick={async () => {
+                    const provider = getProvider('google-drive');
+                    if (!provider) return;
+                    try {
+                      await provider.requestAccess();
+                      toast('Google Drive connected', 'success');
+                    } catch {
+                      toast('Failed to connect Google Drive', 'error');
+                    }
+                  }}
+                  className="flex-1 h-11 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all text-sm"
+                >
+                  Reconnect Drive
+                </button>
+              )}
+              <button
+                onClick={handleSignOut}
+                className="flex-1 h-11 rounded-xl bg-[var(--accent-danger)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all text-sm"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         )}
 

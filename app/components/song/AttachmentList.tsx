@@ -29,7 +29,6 @@ interface AttachmentListProps {
   onEdit: (attachment: Attachment) => void;
   onDelete: (attachmentId: string) => void;
   onToggleDefault: (attachmentId: string) => void;
-  onNameChange: (attachmentId: string, name: string) => void;
   onReorder: (orderedIds: string[]) => void;
   onAddText: () => void;
   onAddImage: () => void;
@@ -44,13 +43,11 @@ function SortableCard({
   onEdit,
   onDelete,
   onToggleDefault,
-  onNameChange,
 }: {
   attachment: Attachment;
   onEdit: () => void;
   onDelete: () => void;
   onToggleDefault: () => void;
-  onNameChange: (name: string) => void;
 }) {
   const {
     attributes,
@@ -74,7 +71,6 @@ function SortableCard({
         onEdit={onEdit}
         onDelete={onDelete}
         onToggleDefault={onToggleDefault}
-        onNameChange={onNameChange}
         dragHandleProps={listeners}
       />
     </div>
@@ -86,7 +82,6 @@ export default function AttachmentList({
   onEdit,
   onDelete,
   onToggleDefault,
-  onNameChange,
   onReorder,
   onAddText,
   onAddImage,
@@ -214,31 +209,19 @@ export default function AttachmentList({
   if (attachments.length === 0) {
     return (
       <div className="p-4">
-        <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-4">
+        <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
           Attachments
         </label>
-        <div className="flex flex-col items-center justify-center h-48 text-center">
-          <svg
-            className="w-12 h-12 text-[var(--muted)] mb-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
+        <p className="text-sm text-[var(--muted)] mb-3">Add sheet music, chord charts, lyrics, or reference images</p>
+        <button
+          onClick={() => setShowAddMenu(true)}
+          className="w-full py-3 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--muted)] font-medium text-sm hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className="text-[var(--muted)] mb-3">Tap below to add sheet music, chord charts, lyrics, or reference images</p>
-          <button
-            onClick={() => setShowAddMenu(true)}
-            className="px-5 py-2.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm active:scale-95 transition-all"
-          >
-            + Add Attachment
-          </button>
-        </div>
+          + Add Attachment
+        </button>
         {addMenuModal}
       </div>
     );
@@ -267,7 +250,6 @@ export default function AttachmentList({
                 onEdit={() => onEdit(attachment)}
                 onDelete={() => handleDelete(attachment.id)}
                 onToggleDefault={() => onToggleDefault(attachment.id)}
-                onNameChange={(name) => onNameChange(attachment.id, name)}
               />
             ))}
           </div>
@@ -278,8 +260,11 @@ export default function AttachmentList({
       <div className="mt-3">
         <button
           onClick={() => setShowAddMenu(true)}
-          className="w-full py-2.5 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--muted)] font-medium text-sm hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+          className="w-full py-2.5 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--muted)] font-medium text-sm hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2"
         >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
           + Add Attachment
         </button>
       </div>

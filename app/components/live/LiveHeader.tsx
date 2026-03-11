@@ -18,6 +18,8 @@ interface LiveHeaderProps {
   transportSlot?: ReactNode;
   isEditMode?: boolean;
   onToggleEditMode?: () => void;
+  onNameChange?: (name: string) => void;
+  onArtistChange?: (artist: string) => void;
 }
 
 export default function LiveHeader({
@@ -30,6 +32,8 @@ export default function LiveHeader({
   transportSlot,
   isEditMode = false,
   onToggleEditMode,
+  onNameChange,
+  onArtistChange,
 }: LiveHeaderProps) {
   const [showQueue, setShowQueue] = useState(false);
   const queueRef = useRef<HTMLDivElement>(null);
@@ -60,8 +64,26 @@ export default function LiveHeader({
           </svg>
         </button>
 
-        {/* Song name — relative container for queue popover */}
-        <div className="flex-1 min-w-0 relative">
+        {/* Song name — editable in edit mode, queue dropdown in performance mode */}
+        <div ref={queueRef} className="flex-1 min-w-0 relative">
+          {isEditMode && onNameChange ? (
+            <div className="flex flex-col items-center py-1">
+              <input
+                type="text"
+                value={songName}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Song name"
+                className="text-lg font-bold text-[var(--foreground)] bg-transparent text-center w-full placeholder:text-[var(--muted)] focus:outline-none"
+              />
+              <input
+                type="text"
+                value={artist || ''}
+                onChange={(e) => onArtistChange?.(e.target.value)}
+                placeholder="Artist"
+                className="text-xs text-[var(--muted)] bg-transparent text-center w-full placeholder:text-[var(--muted)] focus:outline-none"
+              />
+            </div>
+          ) : (
           <button
             onClick={() => setShowQueue(!showQueue)}
             className="w-full flex flex-col items-center justify-center py-1 rounded-xl hover:bg-[var(--card)] transition-colors"
@@ -84,10 +106,11 @@ export default function LiveHeader({
               <span className="text-xs text-[var(--muted)] truncate max-w-[200px]">{artist}</span>
             )}
           </button>
+          )}
 
           {/* Queue popover — floating, overlays content */}
           {showQueue && queue.length > 0 && (
-            <div ref={queueRef} className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 w-full max-w-[400px]">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 w-full max-w-[400px]">
               <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
                 {/* Queue header */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">

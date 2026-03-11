@@ -15,7 +15,10 @@ import { useAssets } from '../hooks/useAssets';
 import { useAuthProvider, useAuth, AuthContext } from '../hooks/useAuth';
 import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { migrateLocalToFirestore } from '../lib/firestore';
+import { useAssetLinkage } from '../hooks/useAssetLinkage';
+import { migrateLocalToFirestore, firestoreGetSongs, firestoreGetAttachments, firestoreUpdateAttachment } from '../lib/firestore';
+import { migrateAttachmentsToAssets, migrateGuestAttachmentsToAssets } from '../lib/asset-migration';
+import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/constants';
 import { ConfirmProvider } from './ui/ConfirmModal';
 import Modal from './ui/Modal';
@@ -32,7 +35,7 @@ function getInitialDarkMode(): boolean {
 }
 
 function AppInner() {
-  const { authState } = useAuth();
+  const { authState, user } = useAuth();
   const isGuest = authState === 'guest';
   const [activeTab, setActiveTab] = useState<Tab>('library');
   const [activeSong, setActiveSong] = useState<Song | null>(null);
@@ -45,7 +48,17 @@ function AppInner() {
   const { toast } = useToast();
   const { songs, createSong, updateSong, deleteSong, isLoading: songsLoading, error: songsError, refresh: refreshSongs } = useSongs(toast);
   const { assets, updateAsset, deleteAsset } = useAssets(toast);
+  const { linkage: assetLinkage, refresh: refreshAssetLinkage } = useAssetLinkage(songs);
   const perfSettings = usePerformanceSettings();
+
+  // Migrate guest attachments to assets (one-time, idempotent)
+  const guestAssetMigrationDone = useRef(false);
+  useEffect(() => {
+    if (isGuest && !songsLoading && songs.length > 0 && !guestAssetMigrationDone.current) {
+      guestAssetMigrationDone.current = true;
+      migrateGuestAttachmentsToAssets(songs);
+    }
+  }, [isGuest, songsLoading, songs]);
 
   // Keep screen on during performance mode
   const isPerforming = activeTab === 'live' && activeSong != null;
@@ -246,8 +259,32 @@ function AppInner() {
     updateAsset(id, { name });
   };
 
-  const handleDeleteAsset = (id: string) => {
+  const handleDeleteAsset = async (id: string) => {
+    // Cascade: clear assetId from all attachments referencing this asset
+    const links = assetLinkage[id] || [];
+    if (isGuest) {
+      for (const link of links) {
+        const attachments = storage.getAttachments(link.songId);
+        for (const att of attachments) {
+          if (att.assetId === id) {
+            storage.updateAttachment(link.songId, att.id, { assetId: '' });
+          }
+        }
+      }
+    } else if (user?.uid) {
+      const { deleteField } = await import('firebase/firestore');
+      for (const link of links) {
+        const attachments = await firestoreGetAttachments(user.uid, link.songId);
+        for (const att of attachments) {
+          if (att.assetId === id) {
+            // Use deleteField() to remove the field from Firestore (undefined is rejected)
+            await firestoreUpdateAttachment(user.uid, link.songId, att.id, { assetId: deleteField() as unknown as string }).catch(() => {});
+          }
+        }
+      }
+    }
     deleteAsset(id);
+    refreshAssetLinkage();
   };
 
   const handleCreateSongFromLive = () => {
@@ -274,6 +311,7 @@ function AppInner() {
             initialViewSetlistId={returnToSetlistId}
             onInitialViewConsumed={() => setReturnToSetlistId(null)}
             assets={assets}
+            assetLinkage={assetLinkage}
             onRenameAsset={handleRenameAsset}
             onDeleteAsset={handleDeleteAsset}
             initialSubTab={librarySubTab}
@@ -322,10 +360,13 @@ function AppInner() {
         )}
       </main>
 
-      <BottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-      />
+      {/* Hide bottom nav when in live mode with active song (full-screen overlays) */}
+      {!(activeTab === 'live' && activeSong) && (
+        <BottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
+      )}
 
       {/* Unsaved changes dialog */}
       <Modal isOpen={!!pendingNavigation} onClose={() => setPendingNavigation(null)} title="Unsaved Changes">
@@ -376,12 +417,15 @@ export default function App() {
             setMigrationProgress({ current, total });
           });
         } finally {
-          setMigrationState('done');
           setMigrationProgress(null);
         }
-      } else {
-        setMigrationState('done');
       }
+
+      // Migrate existing attachments to assets (idempotent)
+      const songs = await firestoreGetSongs(authValue.user!.uid);
+      await migrateAttachmentsToAssets(authValue.user!.uid, songs);
+
+      setMigrationState('done');
     };
     runMigration();
   }, [authValue.authState, authValue.user]);

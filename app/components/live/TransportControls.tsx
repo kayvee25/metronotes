@@ -63,16 +63,18 @@ export default function TransportControls({
 
   const { bpm, isPlaying, currentBeat, isBeating, isMuted,
           audioMode, audioAttachments,
-          btIsPlaying, btIsCountingIn, btCurrentTime, btDuration, btBuffered, btVolume } = transport;
+          btIsPlaying, btIsCountingIn, btCurrentTime, btDuration, btBuffered, btVolume, btActiveTrackId } = transport;
 
   // Volume value
-  const volumeValue = audioMode === 'backingtrack' ? btVolume : (isMuted ? 0 : 1);
+  const metronomeVolume = transport.metronomeVolume ?? 1;
+  const volumeValue = audioMode === 'backingtrack' ? btVolume : (isMuted ? 0 : metronomeVolume);
   const handleVolumeChange = (val: number) => {
     if (audioMode === 'backingtrack') {
       onBtSetVolume(val);
     } else {
-      if (val < 0.5 && !isMuted) onToggleMute();
-      else if (val >= 0.5 && isMuted) onToggleMute();
+      if (val === 0 && !isMuted) onToggleMute();
+      else if (val > 0 && isMuted) onToggleMute();
+      if (val > 0) transport.onMetronomeVolumeChange?.(val);
     }
   };
 
@@ -107,13 +109,16 @@ export default function TransportControls({
 
   // Reusable source icons
   const metronomeIcon = (className: string) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-      {/* Metronome body — trapezoid */}
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      {/* Metronome body — trapezoid with fill */}
+      <path d="M8 21h8l-2-16h-4L8 21z" fill="currentColor" opacity={0.15} />
       <path d="M8 21h8l-2-16h-4L8 21z" />
+      {/* Tick marks on face */}
+      <path d="M10.5 17h3" strokeWidth={1.5} opacity={0.5} />
       {/* Pendulum arm */}
-      <path d="M12 15l4-10" strokeWidth={2} />
+      <path d="M12 15l4-10" strokeWidth={2.5} />
       {/* Pendulum weight */}
-      <circle cx="15" cy="7" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="6.5" r="2" fill="currentColor" stroke="none" />
     </svg>
   );
 
@@ -137,9 +142,9 @@ export default function TransportControls({
 
   // Get icon for a source option
   const getSourceIcon = (source: SourceOption) => {
-    if (source.type === 'metronome') return metronomeIcon("w-4 h-4 flex-shrink-0");
-    if (source.type === 'none') return offIcon("w-4 h-4 flex-shrink-0");
-    return musicNoteIcon("w-4 h-4 flex-shrink-0");
+    if (source.type === 'metronome') return metronomeIcon("w-5 h-5 flex-shrink-0");
+    if (source.type === 'none') return offIcon("w-5 h-5 flex-shrink-0");
+    return musicNoteIcon("w-5 h-5 flex-shrink-0");
   };
 
   // Source picker dropdown
@@ -151,7 +156,7 @@ export default function TransportControls({
           : source.attachment.name || 'Audio';
         const isActive = (source.type === 'metronome' && audioMode === 'metronome')
           || (source.type === 'none' && audioMode === 'off')
-          || (source.type === 'audio' && audioMode === 'backingtrack');
+          || (source.type === 'audio' && audioMode === 'backingtrack' && source.attachment.id === btActiveTrackId);
         return (
           <button
             key={source.type === 'audio' ? source.attachment.id : source.type}

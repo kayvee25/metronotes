@@ -19,9 +19,70 @@ import { STORAGE_KEYS } from './constants';
 import { getAllGuestBlobs, clearAllGuestBlobs } from './guest-blob-storage';
 import { uploadAttachmentFile, getStoragePath } from './storage-firebase';
 
-// Strip undefined values — Firestore rejects them in setDoc/updateDoc
+// Firestore rejects nested arrays. Stroke.points is Array<[x,y,p]> which is
+// an array of arrays. Convert to array of {x,y,p} objects before writing,
+// and convert back when reading.
+function flattenNestedArrays(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => {
+      // Convert [number, number, number] tuples to {x, y, p} objects
+      if (Array.isArray(item) && item.length >= 2 && item.every(v => typeof v === 'number')) {
+        return { x: item[0], y: item[1], p: item[2] ?? 0.5 };
+      }
+      return flattenNestedArrays(item);
+    });
+  }
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = flattenNestedArrays(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
+function unflattenPointObjects(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => {
+      // Convert {x, y, p} objects back to [x, y, p] tuples
+      if (item !== null && typeof item === 'object' && !Array.isArray(item) && 'x' in item && 'y' in item) {
+        const pt = item as { x: number; y: number; p?: number };
+        return [pt.x, pt.y, pt.p ?? 0.5];
+      }
+      return unflattenPointObjects(item);
+    });
+  }
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = unflattenPointObjects(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
+// Deep-strip undefined values — Firestore rejects them at any depth
 function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = stripUndefined(value as Record<string, unknown>);
+    } else if (Array.isArray(value)) {
+      result[key] = value.map(item =>
+        item !== null && typeof item === 'object' && !Array.isArray(item)
+          ? stripUndefined(item as Record<string, unknown>)
+          : item
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as T;
 }
 
 function songsCollection(userId: string) {
@@ -132,21 +193,23 @@ function attachmentsCollection(userId: string, songId: string) {
 export async function firestoreGetAttachments(userId: string, songId: string): Promise<Attachment[]> {
   const q = query(attachmentsCollection(userId, songId), orderBy('order'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Attachment));
+  return snapshot.docs.map((d) => unflattenPointObjects({ id: d.id, ...d.data() }) as Attachment);
 }
 
 export async function firestoreCreateAttachment(userId: string, songId: string, input: AttachmentInput): Promise<Attachment> {
   const id = generateId();
   const now = getTimestamp();
-  const data = stripUndefined({ ...input, createdAt: now, updatedAt: now });
+  const raw = stripUndefined({ ...input, createdAt: now, updatedAt: now });
+  const data = flattenNestedArrays(raw) as Record<string, unknown>;
   await setDoc(doc(db, 'users', userId, 'songs', songId, 'attachments', id), data);
-  return { ...data, id };
+  return { ...raw, id };
 }
 
 export async function firestoreUpdateAttachment(userId: string, songId: string, attachmentId: string, update: AttachmentUpdate): Promise<void> {
   const ref = doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId);
   const clean = stripUndefined(update);
-  await updateDoc(ref, { ...clean, updatedAt: getTimestamp() });
+  const payload = flattenNestedArrays({ ...clean, updatedAt: getTimestamp() }) as Record<string, unknown>;
+  await updateDoc(ref, payload);
 }
 
 export async function firestoreDeleteAttachment(userId: string, songId: string, attachmentId: string): Promise<void> {
@@ -178,13 +241,13 @@ function assetsCollection(userId: string) {
 
 export async function firestoreGetAssets(userId: string): Promise<Asset[]> {
   const snapshot = await getDocs(assetsCollection(userId));
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Asset));
+  return snapshot.docs.map((d) => unflattenPointObjects({ id: d.id, ...d.data() }) as Asset);
 }
 
 export async function firestoreCreateAsset(userId: string, input: AssetInput): Promise<Asset> {
   const id = generateId();
   const now = getTimestamp();
-  const data = stripUndefined({
+  const raw = stripUndefined({
     name: input.name,
     type: input.type,
     mimeType: input.mimeType ?? null,
@@ -195,14 +258,16 @@ export async function firestoreCreateAsset(userId: string, input: AssetInput): P
     createdAt: now,
     updatedAt: now,
   });
+  const data = flattenNestedArrays(raw) as Record<string, unknown>;
   await setDoc(doc(db, 'users', userId, 'assets', id), data);
-  return { ...data, id } as Asset;
+  return { ...raw, id } as Asset;
 }
 
 export async function firestoreUpdateAsset(userId: string, assetId: string, update: AssetUpdate): Promise<void> {
   const ref = doc(db, 'users', userId, 'assets', assetId);
   const clean = stripUndefined(update);
-  await updateDoc(ref, { ...clean, updatedAt: getTimestamp() });
+  const payload = flattenNestedArrays({ ...clean, updatedAt: getTimestamp() }) as Record<string, unknown>;
+  await updateDoc(ref, payload);
 }
 
 export async function firestoreDeleteAsset(userId: string, assetId: string): Promise<void> {
@@ -229,7 +294,9 @@ export async function migrateLocalToFirestore(
     const attData = localStorage.getItem(STORAGE_KEYS.attachments(song.id));
     return sum + (attData ? JSON.parse(attData).length : 0);
   }, 0);
-  const total = localSongs.length + localSetlists.length + totalAttachments + guestBlobs.length;
+  const assetsForCount = localStorage.getItem(STORAGE_KEYS.ASSETS);
+  const localAssetsCount = assetsForCount ? JSON.parse(assetsForCount).length : 0;
+  const total = localSongs.length + localSetlists.length + totalAttachments + localAssetsCount + guestBlobs.length;
   let current = 0;
 
   // Upload songs preserving IDs
@@ -264,6 +331,16 @@ export async function migrateLocalToFirestore(
     }
   }
 
+  // Upload assets preserving IDs
+  const assetsData = localStorage.getItem(STORAGE_KEYS.ASSETS);
+  const localAssets: Asset[] = assetsData ? JSON.parse(assetsData) : [];
+  for (const asset of localAssets) {
+    const { id, ...data } = asset;
+    await setDoc(doc(db, 'users', userId, 'assets', id), data);
+    current++;
+    onProgress?.(current, total);
+  }
+
   // Upload guest blobs to Firebase Storage and update attachment docs
   for (const { songId, attachmentId, blob } of guestBlobs) {
     try {
@@ -283,5 +360,6 @@ export async function migrateLocalToFirestore(
   // Clear all local data
   localStorage.removeItem(STORAGE_KEYS.SONGS);
   localStorage.removeItem(STORAGE_KEYS.SETLISTS);
+  localStorage.removeItem(STORAGE_KEYS.ASSETS);
   await clearAllGuestBlobs();
 }

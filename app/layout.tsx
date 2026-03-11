@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Instrument_Sans, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
+const instrumentSans = Instrument_Sans({
   variable: '--font-geist-sans',
   subsets: ['latin']
 });
@@ -42,7 +42,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${instrumentSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
     </html>
   );
 }

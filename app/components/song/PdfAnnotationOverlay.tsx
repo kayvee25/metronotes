@@ -6,8 +6,7 @@ import { useDrawing, DRAWING_COLORS, DrawingColor } from '../../hooks/useDrawing
 import { loadPdfJs } from '../../lib/pdf-loader';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import {
-  hitTest, pinchDistance, pinchCenter,
-  useZoomPan, MIN_ZOOM, MAX_ZOOM, DrawingHeader, StrokeRenderer,
+  useZoomPan, useDrawingGestures, MIN_ZOOM, MAX_ZOOM, DrawingHeader, StrokeRenderer,
 } from './drawing-shared';
 import { useConfirm } from '../ui/ConfirmModal';
 
@@ -88,115 +87,16 @@ const PageDrawing = forwardRef<PageDrawingHandle, PageDrawingProps>(
       onToolbarUpdate({ strokes, activeTool, activeColor, setActiveTool, setActiveColor, undo, clearAll });
     }, [strokes, activeTool, activeColor, setActiveTool, setActiveColor, undo, clearAll, onToolbarUpdate]);
 
-    // Pointer tracking for gesture detection
-    const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-    const gestureRef = useRef<'none' | 'draw' | 'pinch'>('none');
-    const isDrawingRef = useRef(false);
-    const lastPinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
-    // Convert screen coords to base (SVG viewBox) coords, accounting for zoom/pan
-    const screenToBase = useCallback((clientX: number, clientY: number): [number, number, number] => {
-      if (!svgRef.current) return [0, 0, 0.5];
-      const rect = svgRef.current.getBoundingClientRect();
-      // rect already reflects CSS transform (zoom/pan)
-      const scaleX = baseWidth / rect.width;
-      const scaleY = baseHeight / rect.height;
-      return [
-        (clientX - rect.left) * scaleX,
-        (clientY - rect.top) * scaleY,
-        0.5,
-      ];
-    }, [baseWidth, baseHeight]);
-
-    const cancelCurrentStroke = useCallback(() => {
-      if (isDrawingRef.current) {
-        isDrawingRef.current = false;
-        endStroke();
-      }
-    }, [endStroke]);
-
-    const handlePointerDown = useCallback((e: React.PointerEvent) => {
-      e.preventDefault();
-      (e.target as Element).setPointerCapture(e.pointerId);
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (pointersRef.current.size === 1) {
-        // Single finger — start drawing
-        gestureRef.current = 'draw';
-        const pos = screenToBase(e.clientX, e.clientY);
-        if (activeTool === 'eraser') {
-          const effectiveScale = displayWidth > 0 ? displayWidth * zoom / baseWidth : 1;
-          const hit = hitTest(pos[0], pos[1], strokes, 20 / effectiveScale);
-          if (hit) erase(hit);
-          return;
-        }
-        isDrawingRef.current = true;
-        startStroke([pos[0], pos[1], e.pressure || 0.5]);
-      } else if (pointersRef.current.size === 2) {
-        // Second finger — switch to pinch/pan, cancel any drawing
-        cancelCurrentStroke();
-        gestureRef.current = 'pinch';
-        const [a, b] = Array.from(pointersRef.current.values());
-        lastPinchRef.current = {
-          dist: pinchDistance(a, b),
-          cx: pinchCenter(a, b).x,
-          cy: pinchCenter(a, b).y,
-        };
-      }
-    }, [activeTool, strokes, screenToBase, startStroke, erase, cancelCurrentStroke, baseWidth, displayWidth, zoom]);
-
-    const handlePointerMove = useCallback((e: React.PointerEvent) => {
-      e.preventDefault();
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (gestureRef.current === 'draw' && pointersRef.current.size === 1) {
-        const pos = screenToBase(e.clientX, e.clientY);
-        if (activeTool === 'eraser') {
-          const effectiveScale = displayWidth > 0 ? displayWidth * zoom / baseWidth : 1;
-          const hit = hitTest(pos[0], pos[1], strokes, 20 / effectiveScale);
-          if (hit) erase(hit);
-          return;
-        }
-        if (isDrawingRef.current) {
-          addPoint([pos[0], pos[1], e.pressure || 0.5]);
-        }
-      } else if (gestureRef.current === 'pinch' && pointersRef.current.size === 2 && lastPinchRef.current) {
-        const [a, b] = Array.from(pointersRef.current.values());
-        const newDist = pinchDistance(a, b);
-        const newCenter = pinchCenter(a, b);
-
-        // Zoom
-        const zoomDelta = newDist / lastPinchRef.current.dist;
-        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomDelta));
-
-        // Pan
-        const dx = newCenter.x - lastPinchRef.current.cx;
-        const dy = newCenter.y - lastPinchRef.current.cy;
-        const newPanX = panX + dx;
-        const newPanY = panY + dy;
-
-        lastPinchRef.current = { dist: newDist, cx: newCenter.x, cy: newCenter.y };
-        onZoomPan(newZoom, newPanX, newPanY);
-      }
-    }, [activeTool, strokes, screenToBase, addPoint, erase, zoom, panX, panY, onZoomPan, baseWidth, displayWidth]);
-
-    const handlePointerUp = useCallback((e: React.PointerEvent) => {
-      e.preventDefault();
-      pointersRef.current.delete(e.pointerId);
-
-      if (pointersRef.current.size === 0) {
-        if (gestureRef.current === 'draw' && isDrawingRef.current) {
-          isDrawingRef.current = false;
-          endStroke();
-        }
-        gestureRef.current = 'none';
-        lastPinchRef.current = null;
-      } else if (pointersRef.current.size === 1) {
-        // Went from 2 fingers back to 1 — stay in pinch mode until all released
-        // to prevent accidental strokes
-      }
-    }, [endStroke]);
+    const { handlePointerDown, handlePointerMove, handlePointerUp } = useDrawingGestures({
+      svgRef, baseWidth, baseHeight,
+      displayWidth,
+      zoom, panX, panY,
+      activeTool, strokes,
+      startStroke, addPoint, endStroke, erase,
+      onPinchZoomPan: onZoomPan,
+    });
 
     return (
       <svg

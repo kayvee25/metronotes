@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, ReactNode, useMemo } from 'react';
 import getStroke from 'perfect-freehand';
 import { Stroke } from '../../types';
 import { DRAWING_COLORS, DrawingColor, DrawingTool } from '../../hooks/useDrawing';
@@ -33,7 +33,7 @@ export function renderStrokeToPath(points: Array<[number, number, number]>): str
 
 // ─── Hit testing ───
 
-export function hitTest(x: number, y: number, strokes: Stroke[], threshold: number = 20): string | null {
+function hitTest(x: number, y: number, strokes: Stroke[], threshold: number = 20): string | null {
   for (let i = strokes.length - 1; i >= 0; i--) {
     const stroke = strokes[i];
     for (const [px, py] of stroke.points) {
@@ -49,11 +49,11 @@ export function hitTest(x: number, y: number, strokes: Stroke[], threshold: numb
 
 // ─── Pinch gesture helpers ───
 
-export function pinchDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
+function pinchDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-export function pinchCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
+function pinchCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
@@ -144,6 +144,133 @@ export function useZoomPan() {
     containerRef, setContentSize, clampPan,
     handleZoomIn, handleZoomOut, handleZoomReset, handleWheel,
   };
+}
+
+// ─── Drawing gestures hook ───
+
+interface UseDrawingGesturesOptions {
+  svgRef: React.RefObject<SVGSVGElement | null>;
+  baseWidth: number;
+  baseHeight: number;
+  /** Display width of the SVG element — used for eraser threshold scaling. 0 = fixed threshold. */
+  displayWidth?: number;
+  zoom: number;
+  panX: number;
+  panY: number;
+  activeTool: DrawingTool;
+  strokes: Stroke[];
+  startStroke: (point: [number, number, number]) => void;
+  addPoint: (point: [number, number, number]) => void;
+  endStroke: () => void;
+  erase: (strokeId: string) => void;
+  /** Called during pinch gesture with raw (unclamped) zoom and pan values */
+  onPinchZoomPan: (zoom: number, panX: number, panY: number) => void;
+}
+
+interface UseDrawingGesturesReturn {
+  handlePointerDown: (e: React.PointerEvent) => void;
+  handlePointerMove: (e: React.PointerEvent) => void;
+  handlePointerUp: (e: React.PointerEvent) => void;
+}
+
+export function useDrawingGestures({
+  svgRef, baseWidth, baseHeight, displayWidth = 0,
+  zoom, panX, panY,
+  activeTool, strokes,
+  startStroke, addPoint, endStroke, erase,
+  onPinchZoomPan,
+}: UseDrawingGesturesOptions): UseDrawingGesturesReturn {
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const gestureRef = useRef<'none' | 'draw' | 'pinch'>('none');
+  const isDrawingRef = useRef(false);
+  const lastPinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null);
+
+  const screenToBase = useCallback((clientX: number, clientY: number, pressure: number = 0.5): [number, number, number] => {
+    if (!svgRef.current) return [0, 0, pressure];
+    const rect = svgRef.current.getBoundingClientRect();
+    const scaleX = baseWidth / rect.width;
+    const scaleY = baseHeight / rect.height;
+    return [(clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY, pressure];
+  }, [svgRef, baseWidth, baseHeight]);
+
+  const cancelCurrentStroke = useCallback(() => {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      endStroke();
+    }
+  }, [endStroke]);
+
+  // Eraser threshold: scale with display size if provided, otherwise fixed
+  const eraserThreshold = useMemo(() => {
+    if (displayWidth && displayWidth > 0) {
+      const effectiveScale = displayWidth * zoom / baseWidth;
+      return 20 / effectiveScale;
+    }
+    return 20;
+  }, [displayWidth, zoom, baseWidth]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointersRef.current.size === 1) {
+      gestureRef.current = 'draw';
+      const pos = screenToBase(e.clientX, e.clientY, e.pressure || 0.5);
+      if (activeTool === 'eraser') {
+        const hit = hitTest(pos[0], pos[1], strokes, eraserThreshold);
+        if (hit) erase(hit);
+        return;
+      }
+      isDrawingRef.current = true;
+      startStroke(pos);
+    } else if (pointersRef.current.size === 2) {
+      cancelCurrentStroke();
+      gestureRef.current = 'pinch';
+      const [a, b] = Array.from(pointersRef.current.values());
+      lastPinchRef.current = { dist: pinchDistance(a, b), cx: pinchCenter(a, b).x, cy: pinchCenter(a, b).y };
+    }
+  }, [activeTool, strokes, screenToBase, startStroke, erase, cancelCurrentStroke, eraserThreshold]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (gestureRef.current === 'draw' && pointersRef.current.size === 1) {
+      const pos = screenToBase(e.clientX, e.clientY, e.pressure || 0.5);
+      if (activeTool === 'eraser') {
+        const hit = hitTest(pos[0], pos[1], strokes, eraserThreshold);
+        if (hit) erase(hit);
+        return;
+      }
+      if (isDrawingRef.current) addPoint(pos);
+    } else if (gestureRef.current === 'pinch' && pointersRef.current.size === 2 && lastPinchRef.current) {
+      const [a, b] = Array.from(pointersRef.current.values());
+      const newDist = pinchDistance(a, b);
+      const newCenter = pinchCenter(a, b);
+      const zoomDelta = newDist / lastPinchRef.current.dist;
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomDelta));
+      const dx = newCenter.x - lastPinchRef.current.cx;
+      const dy = newCenter.y - lastPinchRef.current.cy;
+      lastPinchRef.current = { dist: newDist, cx: newCenter.x, cy: newCenter.y };
+      onPinchZoomPan(newZoom, panX + dx, panY + dy);
+    }
+  }, [activeTool, strokes, screenToBase, addPoint, erase, eraserThreshold, zoom, panX, panY, onPinchZoomPan]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size === 0) {
+      if (gestureRef.current === 'draw' && isDrawingRef.current) {
+        isDrawingRef.current = false;
+        endStroke();
+      }
+      gestureRef.current = 'none';
+      lastPinchRef.current = null;
+    }
+  }, [endStroke]);
+
+  return { handlePointerDown, handlePointerMove, handlePointerUp };
 }
 
 // ─── Drawing toolbar ───
@@ -257,6 +384,33 @@ export function DrawingToolbar({
           )}
         </div>
 
+        {/* Zoom controls */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onZoomOut}
+            disabled={zoom <= MIN_ZOOM}
+            className="w-8 h-8 rounded-lg bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center transition-all disabled:opacity-30 text-sm font-bold"
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <button
+            onClick={onZoomReset}
+            className="px-2 h-8 rounded-lg bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center transition-all text-xs font-medium min-w-[2.75rem]"
+            aria-label="Reset zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={onZoomIn}
+            disabled={zoom >= MAX_ZOOM}
+            className="w-8 h-8 rounded-lg bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center transition-all disabled:opacity-30 text-sm font-bold"
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+        </div>
+
         {/* Actions */}
         <div className="flex items-center gap-2">
           <button
@@ -282,33 +436,6 @@ export function DrawingToolbar({
             </svg>
           </button>
         </div>
-      </div>
-
-      {/* Zoom controls */}
-      <div className="flex items-center justify-center gap-2 mt-2">
-        <button
-          onClick={onZoomOut}
-          disabled={zoom <= MIN_ZOOM}
-          className="w-8 h-8 rounded-lg bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center transition-all disabled:opacity-30 text-sm font-bold"
-          aria-label="Zoom out"
-        >
-          −
-        </button>
-        <button
-          onClick={onZoomReset}
-          className="px-3 h-8 rounded-lg bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center transition-all text-xs font-medium min-w-[3.5rem]"
-          aria-label="Reset zoom"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button
-          onClick={onZoomIn}
-          disabled={zoom >= MAX_ZOOM}
-          className="w-8 h-8 rounded-lg bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center transition-all disabled:opacity-30 text-sm font-bold"
-          aria-label="Zoom in"
-        >
-          +
-        </button>
       </div>
     </div>
   );

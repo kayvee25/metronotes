@@ -194,6 +194,7 @@ interface SongViewProps {
   hidePerformanceHeader?: boolean;
   onTransportUpdate?: (state: TransportState) => void;
   onModeChange?: (mode: 'performance' | 'edit') => void;
+  onBeat?: (beatNumber: number) => void;
 }
 
 interface FormState {
@@ -254,6 +255,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   hidePerformanceHeader = false,
   onTransportUpdate,
   onModeChange,
+  onBeat,
 }, ref) {
   const { authState, user } = useAuth();
   const { toast } = useToast();
@@ -299,6 +301,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     initialBpm: song?.bpm || BPM.DEFAULT,
     initialTimeSignature: song?.timeSignature || TIME_SIGNATURE.DEFAULT,
     sound: metronomeSound,
+    onBeat,
   });
 
   const {

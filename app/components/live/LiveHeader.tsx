@@ -42,7 +42,9 @@ export default function LiveHeader({
   useEffect(() => {
     if (!showQueue) return;
     const handler = (e: MouseEvent | TouchEvent) => {
-      const target = e instanceof TouchEvent ? e.touches[0]?.target || e.target : e.target;
+      const target = typeof TouchEvent !== 'undefined' && e instanceof TouchEvent
+        ? e.touches[0]?.target || e.target
+        : e.target;
       if (queueRef.current && !queueRef.current.contains(target as Node)) {
         setShowQueue(false);
       }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import SongView, { SongViewHandle, TransportState } from '../SongView';
 import LiveHeader, { QueueSong } from './LiveHeader';
 import MetadataRow from './MetadataRow';
@@ -26,6 +26,10 @@ interface LivePerformanceViewProps {
   metronomeSound?: MetronomeSound;
   songViewRef?: React.RefObject<SongViewHandle | null>;
   initialEditMode?: boolean;
+  onBeat?: (beatNumber: number) => void;
+  onMetronomeStateChange?: (state: { bpm: number; timeSignature: [number, number]; isPlaying: boolean }) => void;
+  sessionQueue?: QueueSong[];
+  sessionQueueIndex?: number;
 }
 
 export default function LivePerformanceView({
@@ -44,6 +48,10 @@ export default function LivePerformanceView({
   metronomeSound,
   songViewRef,
   initialEditMode = false,
+  onBeat,
+  onMetronomeStateChange,
+  sessionQueue,
+  sessionQueueIndex,
 }: LivePerformanceViewProps) {
   const internalRef = useRef<SongViewHandle>(null);
   const ref = songViewRef || internalRef;
@@ -68,6 +76,29 @@ export default function LivePerformanceView({
     setTransport(state);
   }, []);
 
+  // Broadcast metronome state to session when it changes
+  const onMetronomeStateChangeRef = useRef(onMetronomeStateChange);
+  useEffect(() => {
+    onMetronomeStateChangeRef.current = onMetronomeStateChange;
+  }, [onMetronomeStateChange]);
+
+  const prevMetroRef = useRef<{ bpm: number; isPlaying: boolean; ts: string } | null>(null);
+  const metroBpm = transport?.bpm;
+  const metroPlaying = transport?.isPlaying;
+  const metroTs = transport?.timeSignature;
+  useEffect(() => {
+    if (metroBpm == null || metroPlaying == null || metroTs == null || !onMetronomeStateChangeRef.current) return;
+    const prev = prevMetroRef.current;
+    if (prev && prev.bpm === metroBpm && prev.isPlaying === metroPlaying && prev.ts === metroTs) return;
+    prevMetroRef.current = { bpm: metroBpm, isPlaying: metroPlaying, ts: metroTs };
+    const parts = metroTs.split('/').map(Number);
+    onMetronomeStateChangeRef.current({
+      bpm: metroBpm,
+      timeSignature: [parts[0] || 4, parts[1] || 4],
+      isPlaying: metroPlaying,
+    });
+  }, [metroBpm, metroPlaying, metroTs]);
+
   const handleModeChange = (mode: 'performance' | 'edit') => {
     setIsEditMode(mode === 'edit');
     if (mode === 'edit' && ref.current) {
@@ -76,23 +107,24 @@ export default function LivePerformanceView({
     }
   };
 
-  // Build queue — match library sort order for non-setlist mode
-  // Cache sort option so we don't read localStorage on every render (transport updates ~60fps)
+  // Build queue — use session queue if provided, otherwise setlist or sorted library
   const sortOption = useMemo(() => getSavedSortOption(), []);
   const sortedSongs = useMemo(
     () => setlist ? songs : sortSongs(songs, sortOption),
     [setlist, songs, sortOption]
   );
-  const queue: QueueSong[] = setlist
+  const queue: QueueSong[] = sessionQueue ?? (setlist
     ? setlist.songIds
         .map(id => songs.find(s => s.id === id))
         .filter((s): s is Song => s != null)
         .map(s => ({ id: s.id, name: s.name, artist: s.artist }))
-    : sortedSongs.map(s => ({ id: s.id, name: s.name, artist: s.artist }));
+    : sortedSongs.map(s => ({ id: s.id, name: s.name, artist: s.artist })));
 
-  const currentIndex = setlist
-    ? songIndex
-    : sortedSongs.findIndex(s => s.id === song.id);
+  const currentIndex = sessionQueue
+    ? (sessionQueueIndex ?? 0)
+    : setlist
+      ? songIndex
+      : sortedSongs.findIndex(s => s.id === song.id);
 
   const handleSelectFromQueue = (index: number) => {
     const queueSong = queue[index];
@@ -195,6 +227,7 @@ export default function LivePerformanceView({
           hidePerformanceHeader
           onTransportUpdate={handleTransportUpdate}
           onModeChange={handleModeChange}
+          onBeat={onBeat}
         />
       </div>
     </div>

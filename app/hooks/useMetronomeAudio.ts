@@ -10,6 +10,7 @@ interface UseMetronomeAudioOptions {
   initialBpm?: number;
   initialTimeSignature?: string;
   sound?: MetronomeSound;
+  onBeat?: (beatNumber: number) => void;
 }
 
 interface UseMetronomeAudioReturn {
@@ -31,7 +32,7 @@ interface UseMetronomeAudioReturn {
 }
 
 export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMetronomeAudioReturn {
-  const { initialBpm = BPM.DEFAULT, initialTimeSignature = TIME_SIGNATURE.DEFAULT, sound = 'default' } = options;
+  const { initialBpm = BPM.DEFAULT, initialTimeSignature = TIME_SIGNATURE.DEFAULT, sound = 'default', onBeat } = options;
 
   const [bpm, setBpm] = useState(initialBpm);
   const [timeSignature, setTimeSignature] = useState(initialTimeSignature);
@@ -50,6 +51,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
   const mutedRef = useRef<boolean>(false);
   const volumeRef = useRef<number>(1);
   const soundRef = useRef<MetronomeSound>(sound);
+  const onBeatRef = useRef(onBeat);
 
   const beatsPerMeasure = parseInt(timeSignature.split('/')[0]) || 4;
 
@@ -65,6 +67,10 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
   useEffect(() => {
     soundRef.current = sound;
   }, [sound]);
+
+  useEffect(() => {
+    onBeatRef.current = onBeat;
+  }, [onBeat]);
 
   // Initialize audio context
   useEffect(() => {
@@ -135,12 +141,14 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
       visualBeatRef.current = 0;
       setCurrentBeat(0);
       setIsBeating(true);
+      onBeatRef.current?.(0);
       setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
 
       visualIntervalRef.current = setInterval(() => {
         visualBeatRef.current = (visualBeatRef.current + 1) % beats;
         setCurrentBeat(visualBeatRef.current);
         setIsBeating(true);
+        onBeatRef.current?.(visualBeatRef.current);
         setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
       }, intervalMs);
     } else {

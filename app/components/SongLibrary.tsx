@@ -27,9 +27,10 @@ interface SongLibraryProps {
   onCreateSong?: (input: SongInput) => Song | null;
   onQuickAddSong?: (song: Song) => void;
   isGuest?: boolean;
+  onAddToSession?: (songs: Song[]) => void;
 }
 
-export default function SongLibrary({ songs, isLoading, error, deleteSong, refresh, onSelectSong, onEditSong, onCreateSong, onQuickAddSong, isGuest = false }: SongLibraryProps) {
+export default function SongLibrary({ songs, isLoading, error, deleteSong, refresh, onSelectSong, onEditSong, onCreateSong, onQuickAddSong, isGuest = false, onAddToSession }: SongLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SongSortOption>(getSavedSortOption);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -79,6 +80,11 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
   };
 
   const handleSongClick = (song: Song) => {
+    // During active session, tap adds to queue instead of opening
+    if (onAddToSession) {
+      onAddToSession([song]);
+      return;
+    }
     if (onSelectSong) {
       onSelectSong(song);
     }
@@ -207,6 +213,15 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
                 key={song.id}
                 onTap={() => handleSongClick(song)}
                 items={[
+                  ...(onAddToSession ? [{
+                    label: 'Add to Session',
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                    ),
+                    onClick: () => onAddToSession([song]),
+                  }] : []),
                   ...(onEditSong ? [{
                     label: 'Edit',
                     icon: (

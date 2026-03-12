@@ -41,13 +41,23 @@ export default function LiveHeader({
   // Close queue on outside click
   useEffect(() => {
     if (!showQueue) return;
-    const handler = (e: MouseEvent) => {
-      if (queueRef.current && !queueRef.current.contains(e.target as Node)) {
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e instanceof TouchEvent ? e.touches[0]?.target || e.target : e.target;
+      if (queueRef.current && !queueRef.current.contains(target as Node)) {
         setShowQueue(false);
       }
     };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowQueue(false);
+    };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler, { passive: true });
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
   }, [showQueue]);
 
   return (
@@ -110,7 +120,7 @@ export default function LiveHeader({
 
           {/* Queue popover — floating, overlays content */}
           {showQueue && queue.length > 0 && (
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 w-full max-w-[400px]">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 w-full max-w-[400px]" role="dialog" aria-label="Song queue">
               <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
                 {/* Queue header */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">

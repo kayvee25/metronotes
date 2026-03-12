@@ -7,8 +7,9 @@ import { loadPdfJs } from '../../lib/pdf-loader';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import {
   hitTest, pinchDistance, pinchCenter,
-  MIN_ZOOM, MAX_ZOOM, ClearConfirmDialog, DrawingHeader, StrokeRenderer,
+  useZoomPan, MIN_ZOOM, MAX_ZOOM, DrawingHeader, StrokeRenderer,
 } from './drawing-shared';
+import { useConfirm } from '../ui/ConfirmModal';
 
 interface PdfAnnotationOverlayProps {
   isOpen: boolean;
@@ -81,7 +82,7 @@ const PageDrawing = forwardRef<PageDrawingHandle, PageDrawingProps>(
     useImperativeHandle(ref, () => ({
       getStrokes: () => strokes,
       isDirty: () => isDirty,
-    }));
+    }), [strokes, isDirty]);
 
     useEffect(() => {
       onToolbarUpdate({ strokes, activeTool, activeColor, setActiveTool, setActiveColor, undo, clearAll });
@@ -225,7 +226,6 @@ export default function PdfAnnotationOverlay({
   title = 'Annotate PDF',
 }: PdfAnnotationOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const drawingRef = useRef<PageDrawingHandle>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [pdfLoaded, setPdfLoaded] = useState(false);
@@ -233,37 +233,13 @@ export default function PdfAnnotationOverlay({
   const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [toolbarState, setToolbarState] = useState<ToolbarState | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const confirm = useConfirm();
 
-  // Zoom & pan state
-  const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-
-  // Clamp pan so content can't scroll beyond its edges
-  const clampPan = useCallback((px: number, py: number, z: number): [number, number] => {
-    if (!containerRef.current || !canvasRef.current) return [px, py];
-    const container = containerRef.current.getBoundingClientRect();
-    const contentW = canvasRef.current.clientWidth;
-    const contentH = canvasRef.current.clientHeight;
-    const scaledW = contentW * z;
-    const scaledH = contentH * z;
-
-    let cx = px, cy = py;
-    if (scaledW <= container.width) {
-      cx = 0;
-    } else {
-      const maxPan = (scaledW - container.width) / 2;
-      cx = Math.max(-maxPan, Math.min(maxPan, px));
-    }
-    if (scaledH <= container.height) {
-      cy = 0;
-    } else {
-      const maxPan = (scaledH - container.height) / 2;
-      cy = Math.max(-maxPan, Math.min(maxPan, py));
-    }
-    return [cx, cy];
-  }, []);
+  const {
+    zoom, panX, panY, setZoom, setPanX, setPanY,
+    containerRef, setContentSize, clampPan,
+    handleZoomIn, handleZoomOut, handleZoomReset, handleWheel,
+  } = useZoomPan();
 
   const allAnnotationsRef = useRef<Record<number, AnnotationLayer>>(
     initialPageAnnotations ? { ...initialPageAnnotations } : {}
@@ -282,11 +258,13 @@ export default function PdfAnnotationOverlay({
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
+    let loadedDoc: PDFDocumentProxy | null = null;
 
     loadPdfJs()
       .then((pdfjs) => pdfjs.getDocument(storageUrl).promise)
       .then((doc) => {
         if (!cancelled) {
+          loadedDoc = doc;
           setPdf(doc);
           setPdfLoaded(true);
         } else {
@@ -299,6 +277,7 @@ export default function PdfAnnotationOverlay({
 
     return () => {
       cancelled = true;
+      loadedDoc?.destroy();
     };
   }, [isOpen, storageUrl]);
 
@@ -306,6 +285,8 @@ export default function PdfAnnotationOverlay({
   useEffect(() => {
     if (!pdf || !canvasRef.current || !containerRef.current) return;
     let cancelled = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let renderTask: any = null;
 
     const renderCurrentPage = async () => {
       const page = await pdf.getPage(currentPage + 1);
@@ -332,37 +313,30 @@ export default function PdfAnnotationOverlay({
       const ctx = canvas.getContext('2d')!;
       ctx.scale(dpr, dpr);
 
-      await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+      renderTask = page.render({ canvasContext: ctx, viewport: scaledViewport });
+      await renderTask.promise;
     };
 
     renderCurrentPage().catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
   }, [pdf, currentPage]);
+
+  // Sync content size to useZoomPan for proper pan clamping
+  useEffect(() => {
+    if (displaySize.width > 0 && displaySize.height > 0) {
+      setContentSize(displaySize.width, displaySize.height);
+    }
+  }, [displaySize.width, displaySize.height, setContentSize]);
 
   const handleZoomPan = useCallback((newZoom: number, newPanX: number, newPanY: number) => {
     const [cx, cy] = clampPan(newPanX, newPanY, newZoom);
     setZoom(newZoom);
     setPanX(cx);
     setPanY(cy);
-  }, [clampPan]);
-
-  const handleZoomIn = useCallback(() => {
-    setZoom(z => Math.min(MAX_ZOOM, z * 1.3));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoom(z => {
-      const newZoom = Math.max(MIN_ZOOM, z / 1.3);
-      if (newZoom <= 1) { setPanX(0); setPanY(0); }
-      return newZoom;
-    });
-  }, []);
-
-  const handleZoomReset = useCallback(() => {
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
-  }, []);
+  }, [clampPan, setZoom, setPanX, setPanY]);
 
   const saveCurrentPageStrokes = useCallback(() => {
     if (!pageDimensions || !drawingRef.current) return;
@@ -388,36 +362,13 @@ export default function PdfAnnotationOverlay({
     setZoom(1);
     setPanX(0);
     setPanY(0);
-  }, [totalPages, currentPage, saveCurrentPageStrokes]);
+  }, [totalPages, currentPage, saveCurrentPageStrokes, setZoom, setPanX, setPanY]);
 
   // Auto-save on back
   const handleBack = useCallback(() => {
     saveCurrentPageStrokes();
     onSave(allAnnotationsRef.current);
   }, [saveCurrentPageStrokes, onSave]);
-
-  // Wheel handler for desktop zoom/pan
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
-      const delta = -e.deltaY * 0.01;
-      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * (1 + delta)));
-      if (newZoom <= 1) {
-        setZoom(newZoom);
-        setPanX(0);
-        setPanY(0);
-      } else {
-        const [cx, cy] = clampPan(panX, panY, newZoom);
-        setZoom(newZoom);
-        setPanX(cx);
-        setPanY(cy);
-      }
-    } else {
-      const [cx, cy] = clampPan(panX - e.deltaX, panY - e.deltaY, zoom);
-      setPanX(cx);
-      setPanY(cy);
-    }
-  }, [zoom, panX, panY, clampPan]);
 
   const handleToolbarUpdate = useCallback((state: ToolbarState) => {
     setToolbarState(state);
@@ -572,7 +523,12 @@ export default function PdfAnnotationOverlay({
                 </svg>
               </button>
               <button
-                onClick={() => { if (toolbarState.strokes.length > 0) setShowClearConfirm(true); }}
+                onClick={async () => {
+                  if (toolbarState.strokes.length > 0) {
+                    const ok = await confirm({ title: 'Clear all?', message: 'This will remove all strokes on this page.', confirmLabel: 'Clear', variant: 'danger' });
+                    if (ok) toolbarState.clearAll();
+                  }
+                }}
                 disabled={toolbarState.strokes.length === 0}
                 title="Clear all"
                 className="w-9 h-9 rounded-lg bg-[var(--card)] text-[var(--accent-danger)] hover:bg-[var(--border)] flex items-center justify-center transition-all disabled:opacity-30"
@@ -614,12 +570,6 @@ export default function PdfAnnotationOverlay({
         </div>
       )}
 
-      <ClearConfirmDialog
-        isOpen={showClearConfirm}
-        onCancel={() => setShowClearConfirm(false)}
-        onConfirm={() => { toolbarState?.clearAll(); setShowClearConfirm(false); }}
-        label="strokes on this page"
-      />
     </div>
   );
 }

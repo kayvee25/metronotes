@@ -62,9 +62,9 @@ export function useCachedUrl(
           objectUrl = URL.createObjectURL(cloudBlob);
           setState({ url: objectUrl, fromCache: false, loading: false, needsReauth: false });
         } catch (err) {
-          // Check if failure is auth-related
+          // Check if failure is auth-related (matches known error patterns from cloud providers)
           const isAuth = err instanceof Error && (
-            err.message.includes('Not authorized') || err.message.includes('access denied')
+            err.message.includes('Not authorized') || err.message.includes('access denied') || err.message.includes('re-connect')
           );
           if (!cancelled) setState({ url: null, fromCache: false, loading: false, needsReauth: isAuth });
         }

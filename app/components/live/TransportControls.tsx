@@ -7,7 +7,6 @@ import { BPM } from '../../lib/constants';
 
 interface TransportControlsProps {
   transport: TransportState | null;
-  musicalKey?: string;
   onTogglePlay: () => void;
   onBpmChange: (bpm: number) => void;
   onToggleMute: () => void;
@@ -16,6 +15,7 @@ interface TransportControlsProps {
   onBtPause: () => void;
   onBtSeek: (time: number) => void;
   onBtSetVolume: (vol: number) => void;
+  onMetronomeVolumeChange?: (vol: number) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -38,8 +38,6 @@ const BeatButton = memo(function BeatButton({
           ? 'bg-red-500 text-white scale-110 shadow-[0_0_14px_rgba(239,68,68,0.5)]'
           : isPlaying && isBeating
           ? 'bg-yellow-500 text-white scale-105 shadow-[0_0_12px_rgba(234,179,8,0.5)]'
-          : isPlaying
-          ? 'bg-[var(--accent)] text-white shadow-md'
           : 'bg-[var(--accent)] text-white shadow-md'
       }`}
       aria-label={isPlaying ? 'Stop' : 'Play'}
@@ -70,6 +68,7 @@ export default function TransportControls({
   onBtPause,
   onBtSeek,
   onBtSetVolume,
+  onMetronomeVolumeChange,
 }: TransportControlsProps) {
   const [showSourcePicker, setShowSourcePicker] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
@@ -77,19 +76,24 @@ export default function TransportControls({
   const sourceRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click/touch
   useEffect(() => {
     if (!showSourcePicker && !showVolume) return;
-    const handler = (e: MouseEvent) => {
-      if (showSourcePicker && sourceRef.current && !sourceRef.current.contains(e.target as Node)) {
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e instanceof TouchEvent ? (e.touches[0]?.target || e.target) : e.target;
+      if (showSourcePicker && sourceRef.current && !sourceRef.current.contains(target as Node)) {
         setShowSourcePicker(false);
       }
-      if (showVolume && volumeRef.current && !volumeRef.current.contains(e.target as Node)) {
+      if (showVolume && volumeRef.current && !volumeRef.current.contains(target as Node)) {
         setShowVolume(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, [showSourcePicker, showVolume]);
 
   if (!transport) return null;
@@ -107,7 +111,7 @@ export default function TransportControls({
     } else {
       if (val === 0 && !isMuted) onToggleMute();
       else if (val > 0 && isMuted) onToggleMute();
-      if (val > 0) transport.onMetronomeVolumeChange?.(val);
+      if (val > 0) onMetronomeVolumeChange?.(val);
     }
   };
 
@@ -214,6 +218,7 @@ export default function TransportControls({
         step={0.01}
         value={volumeValue}
         onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+        aria-label="Volume"
         className="h-24 accent-[var(--accent)]"
         style={{ writingMode: 'vertical-lr', direction: 'rtl' } as React.CSSProperties}
       />
@@ -407,9 +412,28 @@ export default function TransportControls({
       {/* Seek bar */}
       <div
         ref={seekBarRef}
+        role="slider"
+        aria-label="Seek"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(btDuration)}
+        aria-valuenow={Math.round(btCurrentTime)}
+        aria-valuetext={`${formatTime(btCurrentTime)} of ${formatTime(btDuration)}`}
+        tabIndex={0}
         className="px-4 pb-2 h-4 flex items-center cursor-pointer group"
         onClick={handleSeekClick}
+        onTouchStart={(e) => {
+          e.preventDefault();
+          handleSeekTouch(e);
+        }}
         onTouchMove={handleSeekTouch}
+        onKeyDown={(e) => {
+          if (btDuration <= 0) return;
+          const step = btDuration * 0.05; // 5% per arrow key
+          if (e.key === 'ArrowRight') { e.preventDefault(); onBtSeek(Math.min(btDuration, btCurrentTime + step)); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); onBtSeek(Math.max(0, btCurrentTime - step)); }
+          else if (e.key === 'Home') { e.preventDefault(); onBtSeek(0); }
+          else if (e.key === 'End') { e.preventDefault(); onBtSeek(btDuration); }
+        }}
       >
         <div className="w-full h-1 group-hover:h-1.5 bg-[var(--border)] rounded-full overflow-visible relative transition-all">
           <div

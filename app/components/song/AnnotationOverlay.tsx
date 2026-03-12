@@ -3,10 +3,11 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { AnnotationLayer } from '../../types';
 import { useDrawing } from '../../hooks/useDrawing';
+import { useConfirm } from '../ui/ConfirmModal';
 import {
   hitTest, pinchDistance, pinchCenter,
   useZoomPan, MIN_ZOOM, MAX_ZOOM,
-  DrawingToolbar, ClearConfirmDialog, DrawingHeader, StrokeRenderer,
+  DrawingToolbar, DrawingHeader, StrokeRenderer,
 } from './drawing-shared';
 
 interface AnnotationOverlayProps {
@@ -31,13 +32,20 @@ export default function AnnotationOverlay({
   const contentRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const confirm = useConfirm();
 
   const {
     zoom, panX, panY, setZoom, setPanX, setPanY,
-    containerRef, clampPan,
+    containerRef, setContentSize, clampPan,
     handleZoomIn, handleZoomOut, handleZoomReset, handleWheel,
   } = useZoomPan();
+
+  // Sync content size to useZoomPan for proper pan clamping
+  useEffect(() => {
+    if (displaySize.width > 0 && displaySize.height > 0) {
+      setContentSize(displaySize.width, displaySize.height);
+    }
+  }, [displaySize.width, displaySize.height, setContentSize]);
 
   // Measure the displayed content size
   useEffect(() => {
@@ -207,18 +215,16 @@ export default function AnnotationOverlay({
         setActiveColor={setActiveColor}
         strokeCount={strokes.length}
         onUndo={undo}
-        onClear={() => { if (strokes.length > 0) setShowClearConfirm(true); }}
+        onClear={async () => {
+          if (strokes.length > 0) {
+            const ok = await confirm({ title: 'Clear all?', message: 'This will remove all annotation strokes.', confirmLabel: 'Clear', variant: 'danger' });
+            if (ok) clearAll();
+          }
+        }}
         zoom={zoom}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
-      />
-
-      <ClearConfirmDialog
-        isOpen={showClearConfirm}
-        onCancel={() => setShowClearConfirm(false)}
-        onConfirm={() => { clearAll(); setShowClearConfirm(false); }}
-        label="annotation strokes"
       />
     </div>
   );

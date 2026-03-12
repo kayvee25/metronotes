@@ -16,7 +16,7 @@ import { useAuthProvider, useAuth, AuthContext } from '../hooks/useAuth';
 import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAssetLinkage } from '../hooks/useAssetLinkage';
-import { migrateLocalToFirestore, firestoreGetSongs, firestoreGetAttachments, firestoreUpdateAttachment } from '../lib/firestore';
+import { migrateLocalToFirestore, firestoreGetSongs, firestoreGetAttachments, firestoreClearAttachmentAssetId } from '../lib/firestore';
 import { migrateAttachmentsToAssets, migrateGuestAttachmentsToAssets } from '../lib/asset-migration';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/constants';
@@ -137,7 +137,7 @@ function AppInner() {
   // Keep ref in sync for popstate handler
   useEffect(() => {
     handleBackRef.current = () => {
-      if (activeTab === 'live' && activeSong) {
+      if (activeTab === 'live' && (activeSong || activeSetlist)) {
         handleClearSong();
       }
     };
@@ -220,11 +220,11 @@ function AppInner() {
   }, []);
 
   const handleTabChange = (tab: Tab) => {
-    if (activeTab === 'live' && activeSong && isDirty) {
+    if (activeTab === 'live' && currentSong && isDirty) {
       setPendingNavigation({ type: 'tab', tab });
       return;
     }
-    if (activeTab === 'live' && activeSong) {
+    if (activeTab === 'live' && currentSong) {
       // Leaving Live tab with a song — clear song state
       setActiveSong(null);
       setActiveSetlist(null);
@@ -272,17 +272,16 @@ function AppInner() {
         const attachments = storage.getAttachments(link.songId);
         for (const att of attachments) {
           if (att.assetId === id) {
-            storage.updateAttachment(link.songId, att.id, { assetId: '' });
+            storage.updateAttachment(link.songId, att.id, { assetId: undefined });
           }
         }
       }
     } else if (user?.uid) {
-      const { deleteField } = await import('firebase/firestore');
       for (const link of links) {
         const attachments = await firestoreGetAttachments(user.uid, link.songId);
         for (const att of attachments) {
           if (att.assetId === id) {
-            await firestoreUpdateAttachment(user.uid, link.songId, att.id, { assetId: deleteField() as unknown as string }).catch((err) => {
+            await firestoreClearAttachmentAssetId(user.uid, link.songId, att.id).catch((err) => {
               console.error('Failed to unlink asset from attachment:', err);
               cascadeErrors++;
             });
@@ -371,7 +370,7 @@ function AppInner() {
       </main>
 
       {/* Hide bottom nav when in live mode with active song (full-screen overlays) */}
-      {!(activeTab === 'live' && activeSong) && (
+      {!(activeTab === 'live' && currentSong) && (
         <BottomNav
           activeTab={activeTab}
           onTabChange={handleTabChange}

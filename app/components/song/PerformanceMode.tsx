@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Song, Setlist, Attachment } from '../../types';
 import { ANIMATION } from '../../lib/constants';
 
@@ -59,12 +59,26 @@ export default function PerformanceMode({
     setCurrentPage(defaultIndex);
   }
 
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up transition timers on unmount
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
+  }, []);
+
   const navigateTo = useCallback((index: number) => {
     if (index === currentPage || index < 0 || index >= attachments.length) return;
+    // Clear any in-progress transition
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     setIsTransitioning(true);
-    setTimeout(() => {
+    transitionTimerRef.current = setTimeout(() => {
       setCurrentPage(index);
-      setTimeout(() => setIsTransitioning(false), ANIMATION.PAGE_SETTLE_MS);
+      settleTimerRef.current = setTimeout(() => setIsTransitioning(false), ANIMATION.PAGE_SETTLE_MS);
     }, ANIMATION.PAGE_TRANSITION_MS);
   }, [currentPage, attachments.length]);
 
@@ -75,7 +89,7 @@ export default function PerformanceMode({
   const currentAttachment = attachments[currentPage];
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--background)]">
+    <div className="flex flex-col h-dvh bg-[var(--background)]">
       {/* Header — hidden when LiveHeader is used */}
       {!hideHeader && (
         <header className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)] max-w-3xl mx-auto w-full">

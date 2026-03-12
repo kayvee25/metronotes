@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { DrawingData } from '../../types';
 import { useDrawing } from '../../hooks/useDrawing';
+import { useConfirm } from '../ui/ConfirmModal';
 import {
   hitTest, pinchDistance, pinchCenter,
   useZoomPan, MIN_ZOOM, MAX_ZOOM,
-  DrawingToolbar, ClearConfirmDialog, DrawingHeader, StrokeRenderer,
+  DrawingToolbar, DrawingHeader, StrokeRenderer,
 } from './drawing-shared';
 
 // Fixed canvas size — portrait orientation for mobile-first use
@@ -21,13 +22,28 @@ interface DrawingCanvasProps {
 
 export default function DrawingCanvas({ isOpen, initialData, onSave }: DrawingCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const confirm = useConfirm();
 
   const {
     zoom, panX, panY, setZoom, setPanX, setPanY,
-    containerRef, clampPan,
+    containerRef, setContentSize, clampPan,
     handleZoomIn, handleZoomOut, handleZoomReset, handleWheel,
   } = useZoomPan();
+
+  // Set content size for pan clamping
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const update = () => {
+      if (svgRef.current) {
+        const r = svgRef.current.getBoundingClientRect();
+        setContentSize(r.width, r.height);
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(svgRef.current);
+    return () => observer.disconnect();
+  }, [setContentSize]);
 
   const canvasWidth = initialData?.canvasWidth || CANVAS_WIDTH;
   const canvasHeight = initialData?.canvasHeight || CANVAS_HEIGHT;
@@ -168,18 +184,16 @@ export default function DrawingCanvas({ isOpen, initialData, onSave }: DrawingCa
         setActiveColor={setActiveColor}
         strokeCount={strokes.length}
         onUndo={undo}
-        onClear={() => { if (strokes.length > 0) setShowClearConfirm(true); }}
+        onClear={async () => {
+          if (strokes.length > 0) {
+            const ok = await confirm({ title: 'Clear all?', message: 'This will remove all strokes from the drawing.', confirmLabel: 'Clear', variant: 'danger' });
+            if (ok) clearAll();
+          }
+        }}
         zoom={zoom}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
-      />
-
-      <ClearConfirmDialog
-        isOpen={showClearConfirm}
-        onCancel={() => setShowClearConfirm(false)}
-        onConfirm={() => { clearAll(); setShowClearConfirm(false); }}
-        label="strokes from the drawing"
       />
     </div>
   );

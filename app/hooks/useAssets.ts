@@ -102,16 +102,18 @@ export function useAssets(onError?: (message: string) => void): UseAssetsReturn 
   }, [isGuest, userId]);
 
   const deleteAsset = useCallback((id: string) => {
-    const previous = assets;
-
     if (isGuest) {
       storage.deleteAsset(id);
       setAssets(storage.getAssets());
       return;
     }
 
-    // Optimistic delete
-    setAssets(prev => prev.filter(a => a.id !== id));
+    // Capture pre-delete state for rollback
+    let previous: Asset[] = [];
+    setAssets(prev => {
+      previous = prev;
+      return prev.filter(a => a.id !== id);
+    });
 
     if (userId) {
       firestoreDeleteAsset(userId, id).catch(() => {
@@ -119,7 +121,7 @@ export function useAssets(onError?: (message: string) => void): UseAssetsReturn 
         onErrorRef.current?.("Can't save — check your internet connection.");
       });
     }
-  }, [assets, isGuest, userId]);
+  }, [isGuest, userId]);
 
   const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a])), [assets]);
   const getAssetById = useCallback((id: string): Asset | undefined => {

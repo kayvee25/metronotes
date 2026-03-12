@@ -71,19 +71,25 @@ export default function LongPressMenu({ items, children, onTap, disabled }: Long
     <>
       <div
         data-pressed={isOpen || undefined}
-        onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
-        onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
-        onMouseUp={handleEnd}
-        onTouchStart={(e) => {
-          const t = e.touches[0];
-          handleStart(t.clientX, t.clientY);
+        tabIndex={0}
+        onPointerDown={(e) => {
+          handleStart(e.clientX, e.clientY);
         }}
-        onTouchMove={(e) => {
-          const t = e.touches[0];
-          handleMove(t.clientX, t.clientY);
-        }}
-        onTouchEnd={handleEnd}
+        onPointerMove={(e) => handleMove(e.clientX, e.clientY)}
+        onPointerUp={handleEnd}
+        onPointerCancel={() => clear()}
         onContextMenu={(e) => e.preventDefault()}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            setMenuPos({ x: rect.left + rect.width / 2, y: rect.top + rect.height });
+            setIsOpen(true);
+          } else if (e.key === 'Escape' && isOpen) {
+            setIsOpen(false);
+          }
+        }}
         className={isOpen ? '[&>*]:bg-[var(--card)]' : ''}
         style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties}
       >

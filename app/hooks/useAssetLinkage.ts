@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Song } from '../types';
 import { storage } from '../lib/storage';
 import { useAuth } from './useAuth';
@@ -21,10 +21,16 @@ export function useAssetLinkage(songs: Song[]): { linkage: AssetLinkageMap; refr
   const [linkage, setLinkage] = useState<AssetLinkageMap>({});
   const [version, setVersion] = useState(0);
 
+  // Stabilize songs reference — only rescan when song IDs actually change
+  const songIdsKey = useMemo(() => songs.map(s => s.id).sort().join(','), [songs]);
+  // Snapshot songs for the effect to use — memoized on songIdsKey
+  const stableSongs = useMemo(() => songs, [songIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (authState !== 'guest' && authState !== 'authenticated') return;
 
     let cancelled = false;
+    const currentSongs = stableSongs;
 
     async function scan() {
       const map: AssetLinkageMap = {};
@@ -37,19 +43,21 @@ export function useAssetLinkage(songs: Song[]): { linkage: AssetLinkageMap; refr
       };
 
       if (isGuest) {
-        for (const song of songs) {
+        for (const song of currentSongs) {
           const attachments = storage.getAttachments(song.id);
           for (const att of attachments) {
             if (att.assetId) addToMap(att.assetId, song.id, song.name);
           }
         }
       } else if (userId) {
-        const results = await Promise.all(
-          songs.map(song =>
+        const results = await Promise.allSettled(
+          currentSongs.map(song =>
             firestoreGetAttachments(userId, song.id).then(atts => ({ song, atts }))
           )
         );
-        for (const { song, atts } of results) {
+        for (const result of results) {
+          if (result.status !== 'fulfilled') continue;
+          const { song, atts } = result.value;
           for (const att of atts) {
             if (att.assetId) addToMap(att.assetId, song.id, song.name);
           }
@@ -63,7 +71,7 @@ export function useAssetLinkage(songs: Song[]): { linkage: AssetLinkageMap; refr
       // Linkage is supplementary info — silently fail
     });
     return () => { cancelled = true; };
-  }, [authState, isGuest, userId, songs, version]);
+  }, [authState, isGuest, userId, stableSongs, version]);
 
   const refresh = () => setVersion(v => v + 1);
 

@@ -13,7 +13,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate, Asset, AssetInput, AssetUpdate } from '../types';
+import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate, Asset, AssetInput, AssetUpdate, AssetType } from '../types';
 import { generateId, getTimestamp } from './utils';
 import { STORAGE_KEYS } from './constants';
 import { getAllGuestBlobs, clearAllGuestBlobs } from './guest-blob-storage';
@@ -31,12 +31,17 @@ function transformStrokesForWrite(strokes: unknown[]): unknown[] {
   }));
 }
 
-/** Convert stroke points on Firestore read: {x,y,p} → [x,y,p] */
+/** Convert stroke points on Firestore read: {x,y,p} → [x,y,p].
+ * Also handles pre-migration data that's already in [x,y,p] array format. */
 function transformStrokesForRead(strokes: unknown[]): unknown[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return strokes.map((stroke: any) => ({
     ...stroke,
-    points: stroke.points?.map((p: { x: number; y: number; p?: number }) => [p.x, p.y, p.p ?? 0.5]) ?? [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    points: stroke.points?.map((p: any) => {
+      if (Array.isArray(p)) return p; // Already in [x,y,p] format (pre-migration data)
+      return [p.x, p.y, p.p ?? 0.5];
+    }) ?? [],
   }));
 }
 
@@ -233,6 +238,13 @@ export async function firestoreUpdateAttachment(userId: string, songId: string, 
   await updateDoc(ref, payload);
 }
 
+/** Remove assetId field from an attachment doc using Firestore's deleteField() */
+export async function firestoreClearAttachmentAssetId(userId: string, songId: string, attachmentId: string): Promise<void> {
+  const { deleteField } = await import('firebase/firestore');
+  const ref = doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId);
+  await updateDoc(ref, { assetId: deleteField(), updatedAt: getTimestamp() });
+}
+
 export async function firestoreDeleteAttachment(userId: string, songId: string, attachmentId: string): Promise<void> {
   await deleteDoc(doc(db, 'users', userId, 'songs', songId, 'attachments', attachmentId));
 }
@@ -265,9 +277,14 @@ export async function firestoreGetAssets(userId: string): Promise<Asset[]> {
   return snapshot.docs.map((d) => restoreFromFirestoreRead({ id: d.id, ...d.data() }) as unknown as Asset);
 }
 
+const VALID_ASSET_TYPES: AssetType[] = ['image', 'pdf', 'audio', 'drawing', 'richtext'];
+
 export async function firestoreCreateAsset(userId: string, input: AssetInput): Promise<Asset> {
   if (!input.name || !input.type) {
     throw new Error('AssetInput requires name and type');
+  }
+  if (!VALID_ASSET_TYPES.includes(input.type)) {
+    throw new Error(`Invalid asset type: ${input.type}`);
   }
   const id = generateId();
   const now = getTimestamp();

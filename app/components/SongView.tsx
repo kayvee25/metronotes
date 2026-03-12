@@ -156,7 +156,6 @@ export interface TransportState {
   btVolume: number;
   btActiveTrackId: string | null;
   metronomeVolume: number;
-  onMetronomeVolumeChange?: (vol: number) => void;
 }
 
 export interface SongViewHandle {
@@ -169,6 +168,7 @@ export interface SongViewHandle {
   btPause: () => void;
   btSeek: (time: number) => void;
   btSetVolume: (vol: number) => void;
+  setMetronomeVolume: (vol: number) => void;
   switchToEdit: () => void;
   switchToPerformance: () => void;
   changeName: (name: string) => void;
@@ -313,7 +313,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   } = useAttachments(song?.id || null, toast);
 
   // Backing track playback
-  const bt = useBackingTrack({
+  const {
+    play: btPlay, pause: btPause, stop: btStop, seek: btSeek, setVolume: btSetVolume,
+    isPlaying: btIsPlaying, isCountingIn: btIsCountingIn,
+    currentTime: btCurrentTime, duration: btDuration, buffered: btBuffered,
+    volume: btVolume, track: btTrack,
+  } = useBackingTrack({
     songId: song?.id || null,
     attachments,
     metronomeSound,
@@ -767,15 +772,15 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       togglePlayStop();
     }
     // Stop backing track if playing
-    bt.stop();
+    btStop();
     setAudioMode(newMode);
-  }, [isPlaying, togglePlayStop, bt]);
+  }, [isPlaying, togglePlayStop, btStop]);
 
   // Derive audio attachment and non-audio attachments for display
   const audioAttachment = attachments.find(a => a.type === 'audio') ?? null;
   const displayAttachments = attachments.filter(a => a.type !== 'audio');
 
-  const hasBackingTrack = audioAttachment != null;
+  const hasBackingTrack = audioAttachment !== null;
 
   // Derive all audio attachments for transport source selection
   const audioAttachments = attachments.filter(a => a.type === 'audio');
@@ -788,21 +793,26 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
 
   // Use audioAttachments.length as dep proxy (array ref changes every render)
   const audioAttachmentsCount = audioAttachments.length;
+  const rafRef = useRef<number>(0);
   useEffect(() => {
-    onTransportUpdateRef.current?.({
-      bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
-      audioMode, hasBackingTrack, audioAttachments: audioAttachmentsRef.current,
-      btIsPlaying: bt.isPlaying, btIsCountingIn: bt.isCountingIn,
-      btCurrentTime: bt.currentTime, btDuration: bt.duration,
-      btBuffered: bt.buffered, btVolume: bt.volume,
-      btActiveTrackId: bt.track?.id ?? null,
-      metronomeVolume,
-      onMetronomeVolumeChange: setMetronomeVolume,
+    // Throttle to one update per animation frame (bt.currentTime changes ~60fps)
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      onTransportUpdateRef.current?.({
+        bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
+        audioMode, hasBackingTrack, audioAttachments: audioAttachmentsRef.current,
+        btIsPlaying, btIsCountingIn,
+        btCurrentTime, btDuration,
+        btBuffered, btVolume,
+        btActiveTrackId: btTrack?.id ?? null,
+        metronomeVolume,
+      });
     });
+    return () => cancelAnimationFrame(rafRef.current);
   }, [bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
       audioMode, hasBackingTrack, audioAttachmentsCount,
-      bt.isPlaying, bt.isCountingIn, bt.currentTime, bt.duration,
-      bt.buffered, bt.volume, bt.track?.id, metronomeVolume, setMetronomeVolume]);
+      btIsPlaying, btIsCountingIn, btCurrentTime, btDuration,
+      btBuffered, btVolume, btTrack?.id, metronomeVolume]);
 
   // Expose save and transport actions to parent via ref
   useImperativeHandle(ref, () => ({
@@ -811,17 +821,20 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     changeBpm: handleBpmChange,
     toggleMute: () => setIsMuted(!isMuted),
     changeAudioMode: handleAudioModeChange,
-    btPlay: () => bt.play(countInBars, bpm, timeSignature),
-    btPause: bt.pause,
-    btSeek: bt.seek,
-    btSetVolume: bt.setVolume,
+    btPlay: () => btPlay(countInBars, bpm, timeSignature),
+    btPause,
+    btSeek,
+    btSetVolume,
+    setMetronomeVolume,
     switchToEdit: () => setMode('edit'),
     switchToPerformance: () => setMode('performance'),
     changeName: setName,
     changeArtist: setArtist,
     getName: () => formState.name,
     getArtist: () => formState.artist,
-  }));
+  }), [handleSave, togglePlayStop, handleBpmChange, isMuted, setIsMuted,
+       handleAudioModeChange, btPlay, btPause, btSeek, btSetVolume,
+       countInBars, bpm, timeSignature, setMetronomeVolume, formState.name, formState.artist, setMode]);
 
   return (
     <>
@@ -876,13 +889,13 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onAddAudio={handleAddAudio}
           onDeleteAudio={deleteAttachment}
           isUploadingAudio={isUploading}
-          btIsPlaying={bt.isPlaying}
-          btCurrentTime={bt.currentTime}
-          btDuration={bt.duration}
-          btBuffered={bt.buffered}
-          onBtPlay={() => bt.play(countInBars, bpm, timeSignature)}
-          onBtPause={bt.pause}
-          onBtSeek={bt.seek}
+          btIsPlaying={btIsPlaying}
+          btCurrentTime={btCurrentTime}
+          btDuration={btDuration}
+          btBuffered={btBuffered}
+          onBtPlay={() => btPlay(countInBars, bpm, timeSignature)}
+          onBtPause={btPause}
+          onBtSeek={btSeek}
           countInBars={countInBars}
           onCountInBarsChange={setCountInBars}
           isGuest={isGuest}

@@ -115,7 +115,7 @@ function RenameModal({ name, onSave, onClose }: { name: string; onSave: (name: s
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Rename file" onClick={onClose}>
       <div className="fixed inset-0 bg-black/50" />
       <div className="relative bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">Rename File</h3>

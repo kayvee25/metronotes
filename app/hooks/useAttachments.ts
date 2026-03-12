@@ -12,27 +12,49 @@ import {
   firestoreDeleteAllAttachments,
   firestoreReorderAttachments,
   firestoreCreateAsset,
+  firestoreDeleteAsset,
 } from '../lib/firestore';
 import { deleteAttachmentFile } from '../lib/storage-firebase';
 import { removeCachedBlob, downloadAndCache } from '../lib/offline-cache';
 import { getGuestBlob, deleteGuestBlob } from '../lib/guest-blob-storage';
 import { generateId, getTimestamp } from '../lib/utils';
 
-/** Shared helper: create attachment + asset in parallel, then link them */
+/** Shared helper: create attachment + asset in parallel, then link them.
+ * If one creation fails, the other is cleaned up to avoid orphans.
+ * If the link step fails, both entities exist but are unlinked — migration will fix. */
 async function createLinkedAttachmentAndAsset(
   userId: string,
   songId: string,
   attachmentInput: AttachmentInput,
   assetInput: AssetInput,
 ): Promise<{ attachment: Attachment; assetId: string }> {
-  const [attachment, asset] = await Promise.all([
+  const [attResult, assetResult] = await Promise.allSettled([
     firestoreCreateAttachment(userId, songId, attachmentInput),
     firestoreCreateAsset(userId, assetInput),
   ]);
-  await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id }).catch((err) => {
+
+  const attachment = attResult.status === 'fulfilled' ? attResult.value : null;
+  const asset = assetResult.status === 'fulfilled' ? assetResult.value : null;
+
+  if (!attachment && !asset) {
+    // Both failed
+    throw attResult.status === 'rejected' ? attResult.reason : new Error('Failed to create attachment and asset');
+  }
+  if (attachment && !asset) {
+    // Attachment created but asset failed — acceptable, just no asset link
+    return { attachment, assetId: '' };
+  }
+  if (asset && !attachment) {
+    // Asset created but attachment failed — delete the orphaned asset
+    firestoreDeleteAsset(userId, asset.id).catch(() => {});
+    throw assetResult.status === 'rejected' ? assetResult.reason : new Error('Failed to create attachment');
+  }
+
+  // Both succeeded — link asset to attachment
+  await firestoreUpdateAttachment(userId, songId, attachment!.id, { assetId: asset!.id }).catch((err) => {
     console.error('Failed to link asset to attachment:', err);
   });
-  return { attachment: { ...attachment, assetId: asset.id }, assetId: asset.id };
+  return { attachment: { ...attachment!, assetId: asset!.id }, assetId: asset!.id };
 }
 
 export function useAttachments(songId: string | null, onError?: (message: string) => void) {
@@ -186,7 +208,12 @@ export function useAttachments(songId: string | null, onError?: (message: string
     const assetInput: AssetInput | null = isCloudLinked ? null : {
       name: input.name || input.fileName || `${input.type} attachment`,
       type: input.type as 'image' | 'pdf' | 'audio' | 'drawing',
-      mimeType: input.cloudMimeType || (input.type === 'pdf' ? 'application/pdf' : input.type === 'audio' ? 'audio/mpeg' : 'image/jpeg'),
+      mimeType: input.cloudMimeType || (
+        input.type === 'pdf' ? 'application/pdf' :
+        input.type === 'audio' ? 'audio/mpeg' :
+        input.type === 'drawing' ? 'application/json' :
+        'image/jpeg'
+      ),
       size: input.fileSize || input.cloudFileSize || null,
       storageUrl: input.storageUrl || null,
       ...(input.type === 'drawing' && input.drawingData ? { drawingData: input.drawingData } : {}),

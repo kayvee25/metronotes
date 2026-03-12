@@ -145,8 +145,12 @@ export function useSongs(onError?: (message: string) => void) {
       firestoreGetAttachments(userId, id)
         .then(async (attachments) => {
           if (!keepFiles) {
-            const assetIds = attachments.map(a => a.assetId).filter((id): id is string => !!id);
-            await Promise.all(assetIds.map(assetId => firestoreDeleteAsset(userId, assetId).catch(() => {})));
+            const assetIds = attachments.map(a => a.assetId).filter((aid): aid is string => !!aid);
+            const results = await Promise.allSettled(assetIds.map(assetId => firestoreDeleteAsset(userId, assetId)));
+            const failures = results.filter(r => r.status === 'rejected').length;
+            if (failures > 0) {
+              onErrorRef.current?.(`${failures} file(s) could not be deleted. They may still exist in your library.`);
+            }
           }
           await firestoreDeleteAllAttachments(userId, id);
           await firestoreDeleteSong(userId, id);

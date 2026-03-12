@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import SongView, { SongViewHandle, TransportState } from '../SongView';
 import LiveHeader, { QueueSong } from './LiveHeader';
 import MetadataRow from './MetadataRow';
@@ -55,6 +55,15 @@ export default function LivePerformanceView({
   const [editArtist, setEditArtist] = useState(song.artist || '');
   const isDirtyRef = useRef(false);
 
+  // Reset edit fields when song changes (conditional setState during render)
+  const [prevSongId, setPrevSongId] = useState(song.id);
+  if (prevSongId !== song.id) {
+    setPrevSongId(song.id);
+    setEditName(song.name);
+    setEditArtist(song.artist || '');
+    setIsEditMode(initialEditMode);
+  }
+
   const handleTransportUpdate = useCallback((state: TransportState) => {
     setTransport(state);
   }, []);
@@ -68,7 +77,9 @@ export default function LivePerformanceView({
   };
 
   // Build queue — match library sort order for non-setlist mode
-  const sortedSongs = setlist ? songs : sortSongs(songs, getSavedSortOption());
+  // Cache sort option so we don't read localStorage on every render (transport updates ~60fps)
+  const sortOption = useMemo(() => getSavedSortOption(), []);
+  const sortedSongs = setlist ? songs : sortSongs(songs, sortOption);
   const queue: QueueSong[] = setlist
     ? setlist.songIds
         .map(id => songs.find(s => s.id === id))
@@ -99,6 +110,7 @@ export default function LivePerformanceView({
   const handleBtPause = () => ref.current?.btPause();
   const handleBtSeek = (time: number) => ref.current?.btSeek(time);
   const handleBtSetVolume = (vol: number) => ref.current?.btSetVolume(vol);
+  const handleSetMetronomeVolume = (vol: number) => ref.current?.setMetronomeVolume(vol);
 
   // Track dirty state for auto-save
   const handleDirtyChange = (dirty: boolean) => {
@@ -131,7 +143,6 @@ export default function LivePerformanceView({
       )}
       <TransportControls
         transport={transport}
-        musicalKey={song.key}
         onTogglePlay={handleTogglePlay}
         onBpmChange={handleBpmChange}
         onToggleMute={handleToggleMute}
@@ -140,6 +151,7 @@ export default function LivePerformanceView({
         onBtPause={handleBtPause}
         onBtSeek={handleBtSeek}
         onBtSetVolume={handleBtSetVolume}
+        onMetronomeVolumeChange={handleSetMetronomeVolume}
       />
     </>
   );

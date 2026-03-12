@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, ReactNode } from 'react';
 import getStroke from 'perfect-freehand';
 import { Stroke } from '../../types';
 import { DRAWING_COLORS, DrawingColor, DrawingTool } from '../../hooks/useDrawing';
@@ -73,9 +73,9 @@ export function useZoomPan() {
   const zoomRef = useRef(zoom);
   const panXRef = useRef(panX);
   const panYRef = useRef(panY);
-  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
-  useEffect(() => { panXRef.current = panX; }, [panX]);
-  useEffect(() => { panYRef.current = panY; }, [panY]);
+  useLayoutEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useLayoutEffect(() => { panXRef.current = panX; }, [panX]);
+  useLayoutEffect(() => { panYRef.current = panY; }, [panY]);
 
   const setContentSize = useCallback((w: number, h: number) => {
     contentSizeRef.current = { width: w, height: h };
@@ -155,7 +155,7 @@ interface DrawingToolbarProps {
   setActiveColor: (color: DrawingColor) => void;
   strokeCount: number;
   onUndo: () => void;
-  onClear: () => void;
+  onClear: () => void | Promise<void>;
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -173,13 +173,23 @@ export function DrawingToolbar({
 
   useEffect(() => {
     if (!showColorPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e instanceof TouchEvent ? e.touches[0]?.target || e.target : e.target;
+      if (colorPickerRef.current && !colorPickerRef.current.contains(target as Node)) {
         setShowColorPicker(false);
       }
     };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowColorPicker(false);
+    };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler, { passive: true });
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
   }, [showColorPicker]);
 
   return (
@@ -299,41 +309,6 @@ export function DrawingToolbar({
         >
           +
         </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Clear confirmation dialog ───
-
-interface ClearConfirmDialogProps {
-  isOpen: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  label?: string;
-}
-
-export function ClearConfirmDialog({ isOpen, onCancel, onConfirm, label = 'annotations' }: ClearConfirmDialogProps) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-[var(--background)] rounded-2xl p-6 max-w-sm w-full shadow-xl border border-[var(--border)]">
-        <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">Clear all?</h3>
-        <p className="text-sm text-[var(--muted)] mb-4">This will remove all {label}.</p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl bg-[var(--card)] text-[var(--foreground)] font-medium active:scale-95 transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2.5 rounded-xl bg-[var(--accent-danger)] text-white font-medium active:scale-95 transition-all"
-          >
-            Clear
-          </button>
-        </div>
       </div>
     </div>
   );

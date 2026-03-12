@@ -278,14 +278,18 @@ function AppInner() {
       }
     } else if (user?.uid) {
       for (const link of links) {
-        const attachments = await firestoreGetAttachments(user.uid, link.songId);
-        for (const att of attachments) {
-          if (att.assetId === id) {
-            await firestoreClearAttachmentAssetId(user.uid, link.songId, att.id).catch((err) => {
-              console.error('Failed to unlink asset from attachment:', err);
-              cascadeErrors++;
-            });
+        try {
+          const attachments = await firestoreGetAttachments(user.uid, link.songId);
+          for (const att of attachments) {
+            if (att.assetId === id) {
+              await firestoreClearAttachmentAssetId(user.uid, link.songId, att.id).catch((err) => {
+                console.error('Failed to unlink asset from attachment:', err);
+                cascadeErrors++;
+              });
+            }
           }
+        } catch {
+          cascadeErrors++;
         }
       }
     }

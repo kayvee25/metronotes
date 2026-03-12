@@ -79,7 +79,10 @@ export default function LivePerformanceView({
   // Build queue — match library sort order for non-setlist mode
   // Cache sort option so we don't read localStorage on every render (transport updates ~60fps)
   const sortOption = useMemo(() => getSavedSortOption(), []);
-  const sortedSongs = setlist ? songs : sortSongs(songs, sortOption);
+  const sortedSongs = useMemo(
+    () => setlist ? songs : sortSongs(songs, sortOption),
+    [setlist, songs, sortOption]
+  );
   const queue: QueueSong[] = setlist
     ? setlist.songIds
         .map(id => songs.find(s => s.id === id))

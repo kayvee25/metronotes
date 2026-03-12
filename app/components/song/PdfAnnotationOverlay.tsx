@@ -1,11 +1,14 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import getStroke from 'perfect-freehand';
 import { AnnotationLayer, Stroke } from '../../types';
 import { useDrawing, DRAWING_COLORS, DrawingColor } from '../../hooks/useDrawing';
 import { loadPdfJs } from '../../lib/pdf-loader';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import {
+  useZoomPan, useDrawingGestures, MIN_ZOOM, MAX_ZOOM, DrawingHeader, StrokeRenderer,
+} from './drawing-shared';
+import { useConfirm } from '../ui/ConfirmModal';
 
 interface PdfAnnotationOverlayProps {
   isOpen: boolean;
@@ -15,55 +18,6 @@ interface PdfAnnotationOverlayProps {
   onSave: (pageAnnotations: Record<number, AnnotationLayer>) => void;
   title?: string;
 }
-
-function getSvgPathFromStroke(stroke: number[][]) {
-  if (!stroke.length) return '';
-  const d = stroke.reduce(
-    (acc, [x0, y0], i, arr) => {
-      const [x1, y1] = arr[(i + 1) % arr.length];
-      acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-      return acc;
-    },
-    ['M', ...stroke[0], 'Q']
-  );
-  d.push('Z');
-  return d.join(' ');
-}
-
-function renderStrokeToPath(points: Array<[number, number, number]>): string {
-  const outlinePoints = getStroke(points, {
-    size: 4,
-    thinning: 0.5,
-    smoothing: 0.5,
-    streamline: 0.5,
-  });
-  return getSvgPathFromStroke(outlinePoints);
-}
-
-function hitTest(x: number, y: number, strokes: Stroke[], threshold: number = 20): string | null {
-  for (let i = strokes.length - 1; i >= 0; i--) {
-    const stroke = strokes[i];
-    for (const [px, py] of stroke.points) {
-      const dx = x - px;
-      const dy = y - py;
-      if (dx * dx + dy * dy < threshold * threshold) {
-        return stroke.id;
-      }
-    }
-  }
-  return null;
-}
-
-function pinchDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-function pinchCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
-
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 5;
 
 // Inner component that manages drawing state per page — remounted via key
 interface PageDrawingHandle {
@@ -127,123 +81,22 @@ const PageDrawing = forwardRef<PageDrawingHandle, PageDrawingProps>(
     useImperativeHandle(ref, () => ({
       getStrokes: () => strokes,
       isDirty: () => isDirty,
-    }));
+    }), [strokes, isDirty]);
 
     useEffect(() => {
       onToolbarUpdate({ strokes, activeTool, activeColor, setActiveTool, setActiveColor, undo, clearAll });
     }, [strokes, activeTool, activeColor, setActiveTool, setActiveColor, undo, clearAll, onToolbarUpdate]);
 
-    // Pointer tracking for gesture detection
-    const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-    const gestureRef = useRef<'none' | 'draw' | 'pinch'>('none');
-    const isDrawingRef = useRef(false);
-    const lastPinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
-    // Convert screen coords to base (SVG viewBox) coords, accounting for zoom/pan
-    const screenToBase = useCallback((clientX: number, clientY: number): [number, number, number] => {
-      if (!svgRef.current) return [0, 0, 0.5];
-      const rect = svgRef.current.getBoundingClientRect();
-      // rect already reflects CSS transform (zoom/pan)
-      const scaleX = baseWidth / rect.width;
-      const scaleY = baseHeight / rect.height;
-      return [
-        (clientX - rect.left) * scaleX,
-        (clientY - rect.top) * scaleY,
-        0.5,
-      ];
-    }, [baseWidth, baseHeight]);
-
-    const cancelCurrentStroke = useCallback(() => {
-      if (isDrawingRef.current) {
-        isDrawingRef.current = false;
-        endStroke();
-      }
-    }, [endStroke]);
-
-    const handlePointerDown = useCallback((e: React.PointerEvent) => {
-      e.preventDefault();
-      (e.target as Element).setPointerCapture(e.pointerId);
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (pointersRef.current.size === 1) {
-        // Single finger — start drawing
-        gestureRef.current = 'draw';
-        const pos = screenToBase(e.clientX, e.clientY);
-        if (activeTool === 'eraser') {
-          const effectiveScale = displayWidth > 0 ? displayWidth * zoom / baseWidth : 1;
-          const hit = hitTest(pos[0], pos[1], strokes, 20 / effectiveScale);
-          if (hit) erase(hit);
-          return;
-        }
-        isDrawingRef.current = true;
-        startStroke([pos[0], pos[1], e.pressure || 0.5]);
-      } else if (pointersRef.current.size === 2) {
-        // Second finger — switch to pinch/pan, cancel any drawing
-        cancelCurrentStroke();
-        gestureRef.current = 'pinch';
-        const [a, b] = Array.from(pointersRef.current.values());
-        lastPinchRef.current = {
-          dist: pinchDistance(a, b),
-          cx: pinchCenter(a, b).x,
-          cy: pinchCenter(a, b).y,
-        };
-      }
-    }, [activeTool, strokes, screenToBase, startStroke, erase, cancelCurrentStroke, baseWidth, displayWidth, zoom]);
-
-    const handlePointerMove = useCallback((e: React.PointerEvent) => {
-      e.preventDefault();
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (gestureRef.current === 'draw' && pointersRef.current.size === 1) {
-        const pos = screenToBase(e.clientX, e.clientY);
-        if (activeTool === 'eraser') {
-          const effectiveScale = displayWidth > 0 ? displayWidth * zoom / baseWidth : 1;
-          const hit = hitTest(pos[0], pos[1], strokes, 20 / effectiveScale);
-          if (hit) erase(hit);
-          return;
-        }
-        if (isDrawingRef.current) {
-          addPoint([pos[0], pos[1], e.pressure || 0.5]);
-        }
-      } else if (gestureRef.current === 'pinch' && pointersRef.current.size === 2 && lastPinchRef.current) {
-        const [a, b] = Array.from(pointersRef.current.values());
-        const newDist = pinchDistance(a, b);
-        const newCenter = pinchCenter(a, b);
-
-        // Zoom
-        const zoomDelta = newDist / lastPinchRef.current.dist;
-        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomDelta));
-
-        // Pan
-        const dx = newCenter.x - lastPinchRef.current.cx;
-        const dy = newCenter.y - lastPinchRef.current.cy;
-        const newPanX = panX + dx;
-        const newPanY = panY + dy;
-
-        lastPinchRef.current = { dist: newDist, cx: newCenter.x, cy: newCenter.y };
-        onZoomPan(newZoom, newPanX, newPanY);
-      }
-    }, [activeTool, strokes, screenToBase, addPoint, erase, zoom, panX, panY, onZoomPan, baseWidth, displayWidth]);
-
-    const handlePointerUp = useCallback((e: React.PointerEvent) => {
-      e.preventDefault();
-      pointersRef.current.delete(e.pointerId);
-
-      if (pointersRef.current.size === 0) {
-        if (gestureRef.current === 'draw' && isDrawingRef.current) {
-          isDrawingRef.current = false;
-          endStroke();
-        }
-        gestureRef.current = 'none';
-        lastPinchRef.current = null;
-      } else if (pointersRef.current.size === 1) {
-        // Went from 2 fingers back to 1 — stay in pinch mode until all released
-        // to prevent accidental strokes
-      }
-    }, [endStroke]);
-
-    const currentPath = currentPoints.length >= 2 ? renderStrokeToPath(currentPoints) : '';
+    const { handlePointerDown, handlePointerMove, handlePointerUp } = useDrawingGestures({
+      svgRef, baseWidth, baseHeight,
+      displayWidth,
+      zoom, panX, panY,
+      activeTool, strokes,
+      startStroke, addPoint, endStroke, erase,
+      onPinchZoomPan: onZoomPan,
+    });
 
     return (
       <svg
@@ -258,17 +111,7 @@ const PageDrawing = forwardRef<PageDrawingHandle, PageDrawingProps>(
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        {strokes.map((stroke) => (
-          <path
-            key={stroke.id}
-            d={renderStrokeToPath(stroke.points)}
-            fill={stroke.color}
-            opacity={activeTool === 'eraser' ? 0.7 : 1}
-          />
-        ))}
-        {currentPath && (
-          <path d={currentPath} fill={activeColor} />
-        )}
+        <StrokeRenderer strokes={strokes} currentPoints={currentPoints} activeColor={activeColor} activeTool={activeTool} />
       </svg>
     );
   }
@@ -283,7 +126,6 @@ export default function PdfAnnotationOverlay({
   title = 'Annotate PDF',
 }: PdfAnnotationOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const drawingRef = useRef<PageDrawingHandle>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [pdfLoaded, setPdfLoaded] = useState(false);
@@ -291,37 +133,13 @@ export default function PdfAnnotationOverlay({
   const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [toolbarState, setToolbarState] = useState<ToolbarState | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const confirm = useConfirm();
 
-  // Zoom & pan state
-  const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-
-  // Clamp pan so content can't scroll beyond its edges
-  const clampPan = useCallback((px: number, py: number, z: number): [number, number] => {
-    if (!containerRef.current || !canvasRef.current) return [px, py];
-    const container = containerRef.current.getBoundingClientRect();
-    const contentW = canvasRef.current.clientWidth;
-    const contentH = canvasRef.current.clientHeight;
-    const scaledW = contentW * z;
-    const scaledH = contentH * z;
-
-    let cx = px, cy = py;
-    if (scaledW <= container.width) {
-      cx = 0;
-    } else {
-      const maxPan = (scaledW - container.width) / 2;
-      cx = Math.max(-maxPan, Math.min(maxPan, px));
-    }
-    if (scaledH <= container.height) {
-      cy = 0;
-    } else {
-      const maxPan = (scaledH - container.height) / 2;
-      cy = Math.max(-maxPan, Math.min(maxPan, py));
-    }
-    return [cx, cy];
-  }, []);
+  const {
+    zoom, panX, panY, setZoom, setPanX, setPanY,
+    containerRef, setContentSize, clampPan,
+    handleZoomIn, handleZoomOut, handleZoomReset, handleWheel,
+  } = useZoomPan();
 
   const allAnnotationsRef = useRef<Record<number, AnnotationLayer>>(
     initialPageAnnotations ? { ...initialPageAnnotations } : {}
@@ -340,11 +158,13 @@ export default function PdfAnnotationOverlay({
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
+    let loadedDoc: PDFDocumentProxy | null = null;
 
     loadPdfJs()
       .then((pdfjs) => pdfjs.getDocument(storageUrl).promise)
       .then((doc) => {
         if (!cancelled) {
+          loadedDoc = doc;
           setPdf(doc);
           setPdfLoaded(true);
         } else {
@@ -357,6 +177,7 @@ export default function PdfAnnotationOverlay({
 
     return () => {
       cancelled = true;
+      loadedDoc?.destroy();
     };
   }, [isOpen, storageUrl]);
 
@@ -364,6 +185,8 @@ export default function PdfAnnotationOverlay({
   useEffect(() => {
     if (!pdf || !canvasRef.current || !containerRef.current) return;
     let cancelled = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let renderTask: any = null;
 
     const renderCurrentPage = async () => {
       const page = await pdf.getPage(currentPage + 1);
@@ -390,37 +213,30 @@ export default function PdfAnnotationOverlay({
       const ctx = canvas.getContext('2d')!;
       ctx.scale(dpr, dpr);
 
-      await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+      renderTask = page.render({ canvasContext: ctx, viewport: scaledViewport });
+      await renderTask.promise;
     };
 
     renderCurrentPage().catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
   }, [pdf, currentPage]);
+
+  // Sync content size to useZoomPan for proper pan clamping
+  useEffect(() => {
+    if (displaySize.width > 0 && displaySize.height > 0) {
+      setContentSize(displaySize.width, displaySize.height);
+    }
+  }, [displaySize.width, displaySize.height, setContentSize]);
 
   const handleZoomPan = useCallback((newZoom: number, newPanX: number, newPanY: number) => {
     const [cx, cy] = clampPan(newPanX, newPanY, newZoom);
     setZoom(newZoom);
     setPanX(cx);
     setPanY(cy);
-  }, [clampPan]);
-
-  const handleZoomIn = useCallback(() => {
-    setZoom(z => Math.min(MAX_ZOOM, z * 1.3));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoom(z => {
-      const newZoom = Math.max(MIN_ZOOM, z / 1.3);
-      if (newZoom <= 1) { setPanX(0); setPanY(0); }
-      return newZoom;
-    });
-  }, []);
-
-  const handleZoomReset = useCallback(() => {
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
-  }, []);
+  }, [clampPan, setZoom, setPanX, setPanY]);
 
   const saveCurrentPageStrokes = useCallback(() => {
     if (!pageDimensions || !drawingRef.current) return;
@@ -446,36 +262,13 @@ export default function PdfAnnotationOverlay({
     setZoom(1);
     setPanX(0);
     setPanY(0);
-  }, [totalPages, currentPage, saveCurrentPageStrokes]);
+  }, [totalPages, currentPage, saveCurrentPageStrokes, setZoom, setPanX, setPanY]);
 
   // Auto-save on back
   const handleBack = useCallback(() => {
     saveCurrentPageStrokes();
     onSave(allAnnotationsRef.current);
   }, [saveCurrentPageStrokes, onSave]);
-
-  // Wheel handler for desktop zoom/pan
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
-      const delta = -e.deltaY * 0.01;
-      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * (1 + delta)));
-      if (newZoom <= 1) {
-        setZoom(newZoom);
-        setPanX(0);
-        setPanY(0);
-      } else {
-        const [cx, cy] = clampPan(panX, panY, newZoom);
-        setZoom(newZoom);
-        setPanX(cx);
-        setPanY(cy);
-      }
-    } else {
-      const [cx, cy] = clampPan(panX - e.deltaX, panY - e.deltaY, zoom);
-      setPanX(cx);
-      setPanY(cy);
-    }
-  }, [zoom, panX, panY, clampPan]);
 
   const handleToolbarUpdate = useCallback((state: ToolbarState) => {
     setToolbarState(state);
@@ -485,7 +278,7 @@ export default function PdfAnnotationOverlay({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col items-center justify-center max-w-3xl mx-auto">
         <svg className="w-6 h-6 text-[var(--muted)] animate-spin mb-2" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
           <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
@@ -496,28 +289,14 @@ export default function PdfAnnotationOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col">
-      {/* Header */}
-      <header className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-        <button
-          onClick={handleBack}
-          className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
-          aria-label="Back"
-        >
-          <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="text-center">
-          <h2 className="text-lg font-bold text-[var(--foreground)]">{title}</h2>
-          {totalPages > 1 && (
-            <p className="text-xs text-[var(--muted)]">
-              Page {currentPage + 1} of {totalPages}
-            </p>
-          )}
-        </div>
-        <div className="w-10" /> {/* Spacer for centering */}
-      </header>
+    <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col max-w-3xl mx-auto">
+      <DrawingHeader
+        title={title}
+        onBack={handleBack}
+        trailing={totalPages > 1 ? (
+          <span className="text-xs text-[var(--muted)] w-10 text-center">{currentPage + 1}/{totalPages}</span>
+        ) : undefined}
+      />
 
       {/* Page navigation for multi-page PDFs */}
       {totalPages > 1 && (
@@ -644,7 +423,12 @@ export default function PdfAnnotationOverlay({
                 </svg>
               </button>
               <button
-                onClick={() => { if (toolbarState.strokes.length > 0) setShowClearConfirm(true); }}
+                onClick={async () => {
+                  if (toolbarState.strokes.length > 0) {
+                    const ok = await confirm({ title: 'Clear all?', message: 'This will remove all strokes on this page.', confirmLabel: 'Clear', variant: 'danger' });
+                    if (ok) toolbarState.clearAll();
+                  }
+                }}
                 disabled={toolbarState.strokes.length === 0}
                 title="Clear all"
                 className="w-9 h-9 rounded-lg bg-[var(--card)] text-[var(--accent-danger)] hover:bg-[var(--border)] flex items-center justify-center transition-all disabled:opacity-30"
@@ -686,29 +470,6 @@ export default function PdfAnnotationOverlay({
         </div>
       )}
 
-      {/* Clear confirmation */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-[var(--background)] rounded-2xl p-6 max-w-sm w-full shadow-xl border border-[var(--border)]">
-            <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">Clear page annotations?</h3>
-            <p className="text-sm text-[var(--muted)] mb-4">This will remove all strokes on this page.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--card)] text-[var(--foreground)] font-medium active:scale-95 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => { toolbarState?.clearAll(); setShowClearConfirm(false); }}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--accent-danger)] text-white font-medium active:scale-95 transition-all"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

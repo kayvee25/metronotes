@@ -6,7 +6,7 @@ import type { CloudProviderId } from '../../lib/cloud-providers/types';
 import BackingTrackSection from './BackingTrackSection';
 import { BPM } from '../../lib/constants';
 import KeySelector from '../KeySelector';
-import PlayFAB from '../ui/PlayFAB';
+
 import AttachmentList from './AttachmentList';
 
 interface EditModeProps {
@@ -16,19 +16,12 @@ interface EditModeProps {
   musicalKey: string;
   bpm: number;
   timeSignature: string;
-  isPlaying: boolean;
-  currentBeat: number;
-  isBeating: boolean;
-  beatsPerMeasure: number;
-  isMuted: boolean;
   showBack: boolean;
   onBack: () => void;
   onNameChange: (name: string) => void;
   onArtistChange: (artist: string) => void;
   onKeyChange: (key: string) => void;
   onBpmChange: (bpm: number) => void;
-  onTogglePlay: () => void;
-  onToggleMute: () => void;
   onSwitchToPerformance: () => void;
   onOpenTimeSigModal: () => void;
   onSave: () => void;
@@ -38,15 +31,14 @@ interface EditModeProps {
   onEditAttachment: (attachment: Attachment) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onToggleDefaultAttachment: (attachmentId: string) => void;
-  onRenameAttachment: (attachmentId: string, name: string) => void;
   onReorderAttachments: (orderedIds: string[]) => void;
   onAddTextAttachment: () => void;
   onAddImageAttachment: () => void;
   onAddCameraAttachment: () => void;
   onAddPdfAttachment: () => void;
   onAddDrawingAttachment: () => void;
-  // Backing track
-  audioAttachment: Attachment | null;
+  // Audio files
+  audioAttachments: Attachment[];
   onAddAudio: () => void;
   onDeleteAudio: (attachmentId: string) => void;
   isUploadingAudio: boolean;
@@ -58,28 +50,12 @@ interface EditModeProps {
   onBtPlay?: () => void;
   onBtPause?: () => void;
   onBtSeek?: (time: number) => void;
-  // Audio mode (PlayFAB)
-  audioMode?: 'metronome' | 'backingtrack' | 'off';
-  onAudioModeChange?: (mode: 'metronome' | 'backingtrack' | 'off') => void;
-  hasBackingTrack?: boolean;
-  backingTrackControls?: {
-    isPlaying: boolean;
-    isCountingIn: boolean;
-    currentTime: number;
-    duration: number;
-    buffered: number;
-    volume: number;
-    onPlay: () => void;
-    onPause: () => void;
-    onStop: () => void;
-    onSeek: (time: number) => void;
-    onVolumeChange: (vol: number) => void;
-  };
   countInBars?: number;
   onCountInBarsChange?: (bars: number) => void;
   isGuest?: boolean;
   onAddFromCloud?: (providerId: CloudProviderId) => void;
   onAddAudioFromCloud?: (providerId: CloudProviderId) => void;
+  hideHeader?: boolean;
 }
 
 export default function EditMode({
@@ -89,18 +65,12 @@ export default function EditMode({
   musicalKey,
   bpm,
   timeSignature,
-  isPlaying,
-  currentBeat,
-  isBeating,
-  isMuted,
   showBack,
   onBack,
   onNameChange,
   onArtistChange,
   onKeyChange,
   onBpmChange,
-  onTogglePlay,
-  onToggleMute,
   onSwitchToPerformance,
   onOpenTimeSigModal,
   onSave,
@@ -109,14 +79,13 @@ export default function EditMode({
   onEditAttachment,
   onDeleteAttachment,
   onToggleDefaultAttachment,
-  onRenameAttachment,
   onReorderAttachments,
   onAddTextAttachment,
   onAddImageAttachment,
   onAddCameraAttachment,
   onAddPdfAttachment,
   onAddDrawingAttachment,
-  audioAttachment,
+  audioAttachments,
   onAddAudio,
   onDeleteAudio,
   isUploadingAudio,
@@ -127,15 +96,12 @@ export default function EditMode({
   onBtPlay,
   onBtPause,
   onBtSeek,
-  audioMode,
-  onAudioModeChange,
-  hasBackingTrack,
-  backingTrackControls,
   countInBars,
   onCountInBarsChange,
   isGuest = false,
   onAddFromCloud,
   onAddAudioFromCloud,
+  hideHeader = false,
 }: EditModeProps) {
   // BPM input state (for editing without immediate validation)
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -164,6 +130,7 @@ export default function EditMode({
   return (
     <div className="flex flex-col min-h-screen bg-[var(--background)] max-w-2xl mx-auto w-full">
       {/* Header */}
+      {!hideHeader && (
       <header className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
         {showBack && (
           <button
@@ -244,6 +211,7 @@ export default function EditMode({
           Save
         </button>
       </header>
+      )}
 
       {/* Guest mode banner */}
       {isGuest && (
@@ -335,7 +303,6 @@ export default function EditMode({
           onEdit={onEditAttachment}
           onDelete={onDeleteAttachment}
           onToggleDefault={onToggleDefaultAttachment}
-          onNameChange={onRenameAttachment}
           onReorder={onReorderAttachments}
           onAddText={onAddTextAttachment}
           onAddImage={onAddImageAttachment}
@@ -347,7 +314,7 @@ export default function EditMode({
 
         {/* Backing track */}
         <BackingTrackSection
-          audioAttachment={audioAttachment}
+          audioAttachments={audioAttachments}
           onUpload={onAddAudio}
           onAddFromCloud={onAddAudioFromCloud}
           onDelete={onDeleteAudio}
@@ -364,22 +331,6 @@ export default function EditMode({
         />
       </div>
 
-      {/* Floating play FAB */}
-      <PlayFAB
-        bpm={bpm}
-        isPlaying={isPlaying}
-        currentBeat={currentBeat}
-        isBeating={isBeating}
-        isMuted={isMuted}
-        onTogglePlay={onTogglePlay}
-        onBpmChange={onBpmChange}
-        onToggleMute={onToggleMute}
-        audioMode={audioMode}
-        onAudioModeChange={onAudioModeChange}
-        hasBackingTrack={hasBackingTrack}
-        backingTrackControls={backingTrackControls}
-        countInBars={countInBars}
-      />
     </div>
   );
 }

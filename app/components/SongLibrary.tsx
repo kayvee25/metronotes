@@ -1,58 +1,26 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useConfirm } from './ui/ConfirmModal';
 import { Song, SongInput } from '../types';
 import { BPM, TIME_SIGNATURE, TIME_SIGNATURES } from '../lib/constants';
 import Modal from './ui/Modal';
-import {
-  SwipeableList,
-  SwipeableListItem,
-  SwipeAction,
-  LeadingActions,
-  TrailingActions,
-  Type,
-} from 'react-swipeable-list';
-import 'react-swipeable-list/dist/styles.css';
 import SongDownloadIcon from './ui/SongDownloadIcon';
+import LongPressMenu from './ui/LongPressMenu';
 import { GUEST } from '../lib/constants';
-
-type SongSortOption = 'name-az' | 'name-za' | 'bpm-low' | 'bpm-high' | 'recent-added' | 'recent-updated';
+import { type SongSortOption, sortSongs, getSavedSortOption } from '../lib/song-sort';
 
 const SORT_OPTIONS: { value: SongSortOption; label: string }[] = [
   { value: 'name-az', label: 'Name A-Z' },
   { value: 'name-za', label: 'Name Z-A' },
-  { value: 'bpm-low', label: 'BPM (Low to High)' },
-  { value: 'bpm-high', label: 'BPM (High to Low)' },
   { value: 'recent-added', label: 'Recently Added' },
   { value: 'recent-updated', label: 'Recently Updated' },
 ];
-
-function sortSongs(songs: Song[], sort: SongSortOption): Song[] {
-  const sorted = [...songs];
-  switch (sort) {
-    case 'name-az':
-      return sorted.sort((a, b) => a.name.localeCompare(b.name));
-    case 'name-za':
-      return sorted.sort((a, b) => b.name.localeCompare(a.name));
-    case 'bpm-low':
-      return sorted.sort((a, b) => a.bpm - b.bpm);
-    case 'bpm-high':
-      return sorted.sort((a, b) => b.bpm - a.bpm);
-    case 'recent-added':
-      return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    case 'recent-updated':
-      return sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    default:
-      return sorted;
-  }
-}
 
 interface SongLibraryProps {
   songs: Song[];
   isLoading: boolean;
   error: string | null;
-  deleteSong: (id: string) => boolean;
+  deleteSong: (id: string, keepFiles?: boolean) => boolean;
   refresh: () => Promise<void>;
   onSelectSong?: (song: Song) => void;
   onEditSong?: (song: Song) => void;
@@ -63,16 +31,7 @@ interface SongLibraryProps {
 
 export default function SongLibrary({ songs, isLoading, error, deleteSong, refresh, onSelectSong, onEditSong, onCreateSong, onQuickAddSong, isGuest = false }: SongLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOption, setSortOption] = useState<SongSortOption>(() => {
-    if (typeof window === 'undefined') return 'name-az';
-    try {
-      const saved = localStorage.getItem('metronotes_songs_sort');
-      if (saved && SORT_OPTIONS.some(o => o.value === saved)) {
-        return saved as SongSortOption;
-      }
-    } catch {}
-    return 'name-az';
-  });
+  const [sortOption, setSortOption] = useState<SongSortOption>(getSavedSortOption);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
@@ -110,16 +69,13 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
 
   const sortedSongs = sortSongs(filteredSongs, sortOption);
 
-  const confirm = useConfirm();
+  const [deleteTarget, setDeleteTarget] = useState<Song | null>(null);
 
-  const handleDeleteSong = async (song: Song) => {
-    const ok = await confirm({
-      title: 'Delete Song',
-      message: `Delete "${song.name}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      variant: 'danger',
-    });
-    if (ok) deleteSong(song.id);
+  const handleDeleteConfirm = (keepFiles: boolean) => {
+    if (deleteTarget) {
+      deleteSong(deleteTarget.id, keepFiles);
+      setDeleteTarget(null);
+    }
   };
 
   const handleSongClick = (song: Song) => {
@@ -156,23 +112,42 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
 
   return (
     <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
-        <h1 className="text-xl font-bold text-[var(--foreground)]">Songs</h1>
-        <div className="flex items-center gap-1">
-        <button
-          onClick={refresh}
-          className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
-          aria-label="Refresh songs"
-        >
-          <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 4m16 16l-1.64-1.64A9 9 0 014.51 15" />
+      {/* Error banner */}
+      {error && (
+        <div className="mx-4 mt-3 px-4 py-2.5 bg-[var(--accent-danger)]/10 border border-[var(--accent-danger)]/20 rounded-xl flex items-center justify-between">
+          <p className="text-sm text-[var(--accent-danger)]">{error}</p>
+          <button onClick={refresh} className="text-sm font-medium text-[var(--accent-danger)] hover:underline ml-3 flex-shrink-0">Retry</button>
+        </div>
+      )}
+
+      {/* Search + Sort */}
+      <div className="px-4 py-3 flex items-center gap-2">
+        <div className="relative flex-1">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted)]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
-        </button>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search songs..."
+            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
+          />
+        </div>
         <div className="relative" ref={sortMenuRef}>
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
-            className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
+            className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
             aria-label="Sort songs"
           >
             <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -196,41 +171,6 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
               ))}
             </div>
           )}
-        </div>
-        </div>
-      </header>
-
-      {/* Error banner */}
-      {error && (
-        <div className="mx-4 mt-3 px-4 py-2.5 bg-[var(--accent-danger)]/10 border border-[var(--accent-danger)]/20 rounded-xl flex items-center justify-between">
-          <p className="text-sm text-[var(--accent-danger)]">{error}</p>
-          <button onClick={refresh} className="text-sm font-medium text-[var(--accent-danger)] hover:underline ml-3 flex-shrink-0">Retry</button>
-        </div>
-      )}
-
-      {/* Search */}
-      <div className="px-4 py-3">
-        <div className="relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted)]"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search songs..."
-            className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
-          />
         </div>
       </div>
 
@@ -261,59 +201,45 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
             )}
           </div>
         ) : (
-          <SwipeableList type={Type.IOS} fullSwipe={false}>
+          <div>
             {sortedSongs.map((song) => (
-              <SwipeableListItem
+              <LongPressMenu
                 key={song.id}
-                leadingActions={
-                  onEditSong ? (
-                    <LeadingActions>
-                      <SwipeAction onClick={() => onEditSong(song)}>
-                        <div className="flex items-center justify-center px-6 bg-[var(--accent)] text-white h-full">
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </div>
-                      </SwipeAction>
-                    </LeadingActions>
-                  ) : undefined
-                }
-                trailingActions={
-                  <TrailingActions>
-                    <SwipeAction
-                      onClick={() => handleDeleteSong(song)}
-                    >
-                      <div className="flex items-center justify-center px-6 bg-[var(--accent-danger)] text-white h-full">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </div>
-                    </SwipeAction>
-                  </TrailingActions>
-                }
+                onTap={() => handleSongClick(song)}
+                items={[
+                  ...(onEditSong ? [{
+                    label: 'Edit',
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    ),
+                    onClick: () => onEditSong(song),
+                  }] : []),
+                  {
+                    label: 'Delete',
+                    variant: 'danger' as const,
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    ),
+                    onClick: () => setDeleteTarget(song),
+                  },
+                ]}
               >
-                <button
-                  onClick={() => handleSongClick(song)}
-                  className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)]"
-                >
+                <div className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
-                    </div>
+                    <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
                     {song.artist && (
                       <p className="text-xs text-[var(--muted)] truncate mt-0.5">{song.artist}</p>
                     )}
                   </div>
                   <SongDownloadIcon songId={song.id} />
-                  {song.key && (
-                    <span className="text-xs font-medium text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
-                      {song.key}
-                    </span>
-                  )}
-                </button>
-              </SwipeableListItem>
+                </div>
+              </LongPressMenu>
             ))}
-          </SwipeableList>
+          </div>
         )}
       </div>
 
@@ -395,6 +321,33 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
             className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
           >
             Create
+          </button>
+        </div>
+      </Modal>
+
+      {/* Delete Song Dialog */}
+      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Song">
+        <p className="text-sm text-[var(--muted)] text-center mb-6 -mt-2">
+          Delete &ldquo;{deleteTarget?.name}&rdquo;? This cannot be undone.
+        </p>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => handleDeleteConfirm(false)}
+            className="w-full h-12 rounded-xl bg-[var(--accent-danger)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
+          >
+            Delete song and files
+          </button>
+          <button
+            onClick={() => handleDeleteConfirm(true)}
+            className="w-full h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
+          >
+            Delete song, keep files
+          </button>
+          <button
+            onClick={() => setDeleteTarget(null)}
+            className="w-full h-12 rounded-xl text-[var(--muted)] font-medium transition-all active:scale-95"
+          >
+            Cancel
           </button>
         </div>
       </Modal>

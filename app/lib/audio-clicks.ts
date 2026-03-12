@@ -9,7 +9,8 @@ export function createDefaultClick(
   ctx: AudioContext,
   isAccent: boolean,
   scheduledTime: number,
-  muted: boolean
+  muted: boolean,
+  volume: number = 1
 ): void {
   if (muted) return;
   const oscillator = ctx.createOscillator();
@@ -18,7 +19,7 @@ export function createDefaultClick(
   oscillator.frequency.value = isAccent ? AUDIO.FREQUENCY.ACCENT : AUDIO.FREQUENCY.REGULAR;
   oscillator.type = 'sine';
 
-  const targetGain = isAccent ? 1 : 0.7;
+  const targetGain = (isAccent ? 1 : 0.7) * volume;
 
   gainNode.gain.setValueAtTime(0, scheduledTime);
   gainNode.gain.linearRampToValueAtTime(targetGain, scheduledTime + 0.001);
@@ -36,7 +37,8 @@ export function createWoodClick(
   ctx: AudioContext,
   isAccent: boolean,
   scheduledTime: number,
-  muted: boolean
+  muted: boolean,
+  volume: number = 1
 ): void {
   if (muted) return;
   const bufferSize = ctx.sampleRate * 0.05; // 50ms
@@ -55,7 +57,7 @@ export function createWoodClick(
   bandpass.Q.value = 3;
 
   const gainNode = ctx.createGain();
-  const targetGain = isAccent ? 1.2 : 0.8;
+  const targetGain = (isAccent ? 1.2 : 0.8) * volume;
 
   gainNode.gain.setValueAtTime(targetGain, scheduledTime);
   gainNode.gain.exponentialRampToValueAtTime(0.01, scheduledTime + 0.06);
@@ -73,10 +75,11 @@ export function createCowbellClick(
   ctx: AudioContext,
   isAccent: boolean,
   scheduledTime: number,
-  muted: boolean
+  muted: boolean,
+  volume: number = 1
 ): void {
   if (muted) return;
-  const targetGain = isAccent ? 0.6 : 0.4;
+  const targetGain = (isAccent ? 0.6 : 0.4) * volume;
 
   const osc1 = ctx.createOscillator();
   const osc2 = ctx.createOscillator();
@@ -118,19 +121,20 @@ export function scheduleClick(
   beat: number,
   time: number,
   sound: MetronomeSound,
-  muted: boolean
+  muted: boolean,
+  volume: number = 1
 ): void {
   const isAccent = beat === 0;
 
   switch (sound) {
     case 'wood':
-      createWoodClick(ctx, isAccent, time, muted);
+      createWoodClick(ctx, isAccent, time, muted, volume);
       break;
     case 'cowbell':
-      createCowbellClick(ctx, isAccent, time, muted);
+      createCowbellClick(ctx, isAccent, time, muted, volume);
       break;
     default:
-      createDefaultClick(ctx, isAccent, time, muted);
+      createDefaultClick(ctx, isAccent, time, muted, volume);
       break;
   }
 }

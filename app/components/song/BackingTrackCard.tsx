@@ -34,8 +34,8 @@ export default function BackingTrackCard({
 
   const handleDelete = async () => {
     const ok = await confirmAction({
-      title: 'Remove Backing Track',
-      message: 'Remove this backing track? This cannot be undone.',
+      title: 'Remove Audio',
+      message: 'Remove this audio file? This cannot be undone.',
       confirmLabel: 'Remove',
       variant: 'danger',
     });
@@ -89,7 +89,7 @@ export default function BackingTrackCard({
         {/* File details */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-[var(--foreground)] truncate">
-            {attachment.fileName || 'Backing Track'}
+            {attachment.name || attachment.fileName || 'Audio'}
           </p>
           <p className="text-xs text-[var(--muted)]">
             {attachment.duration != null && formatDuration(attachment.duration)}
@@ -101,10 +101,10 @@ export default function BackingTrackCard({
         {/* Delete button */}
         <button
           onClick={handleDelete}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--accent-danger)] hover:bg-[var(--accent-danger)]/10 transition-colors flex-shrink-0"
-          aria-label="Remove backing track"
+          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--accent-danger)]/10 transition-colors flex-shrink-0"
+          aria-label="Remove audio"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-[var(--accent-danger)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
         </button>

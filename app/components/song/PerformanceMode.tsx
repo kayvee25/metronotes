@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Song, Setlist, Attachment } from '../../types';
 import { ANIMATION } from '../../lib/constants';
-import PlayFAB from '../ui/PlayFAB';
+
 import PageDots from '../ui/PageDots';
 import AttachmentPage from './AttachmentPage';
 
@@ -14,39 +14,16 @@ interface PerformanceModeProps {
   musicalKey: string;
   bpm: number;
   timeSignature: string;
-  isPlaying: boolean;
-  currentBeat: number;
-  isBeating: boolean;
   setlist?: Setlist | null;
   songIndex: number;
   showBack: boolean;
   onBack: () => void;
   onPrevSong?: () => void;
   onNextSong?: () => void;
-  onTogglePlay: () => void;
-  onBpmChange: (bpm: number) => void;
   onSwitchToEdit: () => void;
   perfFontSize?: string;
   perfFontFamily?: string;
-  isMuted?: boolean;
-  onToggleMute?: () => void;
-  audioMode?: 'metronome' | 'backingtrack' | 'off';
-  onAudioModeChange?: (mode: 'metronome' | 'backingtrack' | 'off') => void;
-  hasBackingTrack?: boolean;
-  backingTrackControls?: {
-    isPlaying: boolean;
-    isCountingIn: boolean;
-    currentTime: number;
-    duration: number;
-    buffered: number;
-    volume: number;
-    onPlay: () => void;
-    onPause: () => void;
-    onStop: () => void;
-    onSeek: (time: number) => void;
-    onVolumeChange: (vol: number) => void;
-  };
-  countInBars?: number;
+  hideHeader?: boolean;
 }
 
 export default function PerformanceMode({
@@ -56,27 +33,16 @@ export default function PerformanceMode({
   musicalKey,
   bpm,
   timeSignature,
-  isPlaying,
-  currentBeat,
-  isBeating,
   setlist,
   songIndex,
   showBack,
   onBack,
   onPrevSong,
   onNextSong,
-  onTogglePlay,
-  onBpmChange,
   onSwitchToEdit,
   perfFontSize = 'md',
   perfFontFamily = 'mono',
-  isMuted = false,
-  onToggleMute,
-  audioMode,
-  onAudioModeChange,
-  hasBackingTrack,
-  backingTrackControls,
-  countInBars,
+  hideHeader = false,
 }: PerformanceModeProps) {
   const hasPrev = setlist && songIndex > 0;
   const hasNext = setlist && songIndex < (setlist.songIds.length - 1);
@@ -93,12 +59,26 @@ export default function PerformanceMode({
     setCurrentPage(defaultIndex);
   }
 
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up transition timers on unmount
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
+  }, []);
+
   const navigateTo = useCallback((index: number) => {
     if (index === currentPage || index < 0 || index >= attachments.length) return;
+    // Clear any in-progress transition
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     setIsTransitioning(true);
-    setTimeout(() => {
+    transitionTimerRef.current = setTimeout(() => {
       setCurrentPage(index);
-      setTimeout(() => setIsTransitioning(false), ANIMATION.PAGE_SETTLE_MS);
+      settleTimerRef.current = setTimeout(() => setIsTransitioning(false), ANIMATION.PAGE_SETTLE_MS);
     }, ANIMATION.PAGE_TRANSITION_MS);
   }, [currentPage, attachments.length]);
 
@@ -109,77 +89,81 @@ export default function PerformanceMode({
   const currentAttachment = attachments[currentPage];
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--background)]">
-      {/* Header */}
-      <header className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)] max-w-3xl mx-auto w-full">
-        {showBack && (
-          <button
-            onClick={onBack}
-            className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
-            aria-label="Back"
-          >
-            <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-        )}
+    <div className="flex flex-col h-dvh bg-[var(--background)]">
+      {/* Header — hidden when LiveHeader is used */}
+      {!hideHeader && (
+        <header className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)] max-w-3xl mx-auto w-full">
+          {showBack && (
+            <button
+              onClick={onBack}
+              className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
+              aria-label="Back"
+            >
+              <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
 
-        {setlist && (
-          <button
-            onClick={onPrevSong}
-            disabled={!hasPrev}
-            className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 flex-shrink-0"
-            aria-label="Previous song"
-          >
-            <svg className="w-5 h-5 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-        )}
+          {setlist && (
+            <button
+              onClick={onPrevSong}
+              disabled={!hasPrev}
+              className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 flex-shrink-0"
+              aria-label="Previous song"
+            >
+              <svg className="w-5 h-5 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
 
-        <div className="flex-1 text-center min-w-0">
-          <h1 className="text-lg font-bold text-[var(--foreground)] truncate">
-            {song?.name || 'New Song'}
-            {setlist && (
-              <span className="text-sm font-medium text-[var(--muted)] ml-2">
-                ({songIndex + 1}/{setlist.songIds.length})
-              </span>
-            )}
-          </h1>
-        </div>
+          <div className="flex-1 text-center min-w-0">
+            <h1 className="text-lg font-bold text-[var(--foreground)] truncate">
+              {song?.name || 'New Song'}
+              {setlist && (
+                <span className="text-sm font-medium text-[var(--muted)] ml-2">
+                  ({songIndex + 1}/{setlist.songIds.length})
+                </span>
+              )}
+            </h1>
+          </div>
 
-        {setlist && (
-          <button
-            onClick={onNextSong}
-            disabled={!hasNext}
-            className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 flex-shrink-0"
-            aria-label="Next song"
-          >
-            <svg className="w-5 h-5 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
+          {setlist && (
+            <button
+              onClick={onNextSong}
+              disabled={!hasNext}
+              className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 flex-shrink-0"
+              aria-label="Next song"
+            >
+              <svg className="w-5 h-5 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
 
-        {!setlist && (
-          <button
-            onClick={onSwitchToEdit}
-            className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
-            aria-label="Edit song"
-          >
-            <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-        )}
-      </header>
+          {!setlist && (
+            <button
+              onClick={onSwitchToEdit}
+              className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
+              aria-label="Edit song"
+            >
+              <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          )}
+        </header>
+      )}
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto p-4 pb-20 max-w-3xl mx-auto w-full">
-        {/* Metadata + dots */}
-        <div className="text-sm text-[var(--muted)] mb-2 text-center">
-          {metaLine}
-        </div>
+        {/* Metadata + dots — hidden when LiveHeader provides this info */}
+        {!hideHeader && (
+          <div className="text-sm text-[var(--muted)] mb-2 text-center">
+            {metaLine}
+          </div>
+        )}
         {!attachmentsLoading && attachments.length > 1 && (
           <div className="mb-4 flex items-center justify-center gap-3">
             <button
@@ -250,22 +234,6 @@ export default function PerformanceMode({
 
       </div>
 
-      {/* Floating play FAB */}
-      <PlayFAB
-        bpm={bpm}
-        isPlaying={isPlaying}
-        currentBeat={currentBeat}
-        isBeating={isBeating}
-        isMuted={isMuted}
-        onTogglePlay={onTogglePlay}
-        onBpmChange={onBpmChange}
-        onToggleMute={onToggleMute}
-        audioMode={audioMode}
-        onAudioModeChange={onAudioModeChange}
-        hasBackingTrack={hasBackingTrack}
-        backingTrackControls={backingTrackControls}
-        countInBars={countInBars}
-      />
     </div>
   );
 }

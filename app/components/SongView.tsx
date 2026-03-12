@@ -17,7 +17,7 @@ import { preloadAudio } from '../lib/offline-cache';
 import { firestoreGetAttachments } from '../lib/firestore';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import { useCloudProvider } from '../hooks/useCloudProvider';
-import { cloudMimeToAttachmentType } from '../lib/cloud-providers/types';
+import { cloudMimeToAttachmentType, isCloudLinked } from '../lib/cloud-providers/types';
 import type { CloudProviderId } from '../lib/cloud-providers/types';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
@@ -27,8 +27,107 @@ import RichTextEditor from './song/RichTextEditor';
 import DrawingCanvas from './song/DrawingCanvas';
 import AnnotationOverlay from './song/AnnotationOverlay';
 import PdfAnnotationOverlay from './song/PdfAnnotationOverlay';
+import { useCachedUrl } from '../hooks/useCachedUrl';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 type Mode = 'performance' | 'edit';
+
+/** Resolves attachment URL (handles cloud-linked files) and renders AnnotationOverlay */
+function ResolvedAnnotationOverlay({ attachment, onSave, onCancel }: {
+  attachment: Attachment;
+  onSave: (annotations: AnnotationLayer) => void;
+  onCancel: () => void;
+}) {
+  const isOnline = useOnlineStatus();
+  const cloud = isCloudLinked(attachment)
+    ? { provider: attachment.cloudProvider!, fileId: attachment.cloudFileId! }
+    : undefined;
+  const { url, loading } = useCachedUrl(attachment.id, attachment.storageUrl || undefined, isOnline, cloud);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[var(--background)] flex items-center justify-center">
+        <svg className="w-6 h-6 text-[var(--muted)] animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
+          <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col items-center justify-center gap-3">
+        <p className="text-[var(--muted)]">Image not available</p>
+        <button onClick={onCancel} className="px-4 py-2 rounded-lg bg-[var(--card)] text-sm">Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <AnnotationOverlay
+      isOpen={true}
+      backgroundContent={
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={attachment.fileName || 'Image'}
+          className="max-w-full max-h-full object-contain"
+          style={{ width: attachment.width, height: attachment.height }}
+        />
+      }
+      baseWidth={attachment.width || 800}
+      baseHeight={attachment.height || 600}
+      initialAnnotations={attachment.annotations}
+      onSave={onSave}
+      title={attachment.name || attachment.fileName || 'Annotate'}
+    />
+  );
+}
+
+/** Resolves attachment URL (handles cloud-linked files) and renders PdfAnnotationOverlay */
+function ResolvedPdfAnnotationOverlay({ attachment, onSave, onCancel }: {
+  attachment: Attachment;
+  onSave: (pageAnnotations: Record<number, AnnotationLayer>) => void;
+  onCancel: () => void;
+}) {
+  const isOnline = useOnlineStatus();
+  const cloud = isCloudLinked(attachment)
+    ? { provider: attachment.cloudProvider!, fileId: attachment.cloudFileId! }
+    : undefined;
+  const { url, loading } = useCachedUrl(attachment.id, attachment.storageUrl || undefined, isOnline, cloud);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[var(--background)] flex items-center justify-center">
+        <svg className="w-6 h-6 text-[var(--muted)] animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={3} opacity={0.25} />
+          <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col items-center justify-center gap-3">
+        <p className="text-[var(--muted)]">PDF not available</p>
+        <button onClick={onCancel} className="px-4 py-2 rounded-lg bg-[var(--card)] text-sm">Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <PdfAnnotationOverlay
+      isOpen={true}
+      storageUrl={url}
+      pageCount={attachment.pageCount}
+      initialPageAnnotations={attachment.pageAnnotations}
+      onSave={onSave}
+      title={attachment.name || attachment.fileName || 'Annotate PDF'}
+    />
+  );
+}
 
 /** Strip file extension to derive a clean display name */
 function nameFromFile(fileName: string): string {
@@ -37,8 +136,45 @@ function nameFromFile(fileName: string): string {
 }
 
 
+export type AudioMode = 'metronome' | 'backingtrack' | 'off';
+
+export interface TransportState {
+  bpm: number;
+  timeSignature: string;
+  isPlaying: boolean;
+  currentBeat: number;
+  isBeating: boolean;
+  isMuted: boolean;
+  audioMode: AudioMode;
+  hasBackingTrack: boolean;
+  audioAttachments: Attachment[];
+  btIsPlaying: boolean;
+  btIsCountingIn: boolean;
+  btCurrentTime: number;
+  btDuration: number;
+  btBuffered: number;
+  btVolume: number;
+  btActiveTrackId: string | null;
+  metronomeVolume: number;
+}
+
 export interface SongViewHandle {
   save: () => void;
+  togglePlay: () => void;
+  changeBpm: (bpm: number) => void;
+  toggleMute: () => void;
+  changeAudioMode: (mode: AudioMode) => void;
+  btPlay: () => void;
+  btPause: () => void;
+  btSeek: (time: number) => void;
+  btSetVolume: (vol: number) => void;
+  setMetronomeVolume: (vol: number) => void;
+  switchToEdit: () => void;
+  switchToPerformance: () => void;
+  changeName: (name: string) => void;
+  changeArtist: (artist: string) => void;
+  getName: () => string;
+  getArtist: () => string;
 }
 
 interface SongViewProps {
@@ -55,6 +191,9 @@ interface SongViewProps {
   perfFontSize?: string;
   perfFontFamily?: string;
   metronomeSound?: MetronomeSound;
+  hidePerformanceHeader?: boolean;
+  onTransportUpdate?: (state: TransportState) => void;
+  onModeChange?: (mode: 'performance' | 'edit') => void;
 }
 
 interface FormState {
@@ -63,8 +202,6 @@ interface FormState {
   musicalKey: string;
   mode: Mode;
 }
-
-type AudioMode = 'metronome' | 'backingtrack' | 'off';
 
 interface OriginalValues {
   name: string;
@@ -114,6 +251,9 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   perfFontSize,
   perfFontFamily,
   metronomeSound = 'default',
+  hidePerformanceHeader = false,
+  onTransportUpdate,
+  onModeChange,
 }, ref) {
   const { authState, user } = useAuth();
   const { toast } = useToast();
@@ -125,6 +265,14 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const [isUploading, setIsUploading] = useState(false);
   const [audioMode, setAudioMode] = useState<AudioMode>(() => song?.audioMode || 'metronome');
   const [countInBars, setCountInBars] = useState(() => song?.countInBars || 1);
+
+  // Notify parent of initial mode
+  const onModeChangeRef = useRef(onModeChange);
+  onModeChangeRef.current = onModeChange;
+  useEffect(() => {
+    onModeChangeRef.current?.(formState.mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally run once on mount
 
   // Reset audioMode/countInBars on song change
   const prevSongIdForAudioRef = useRef(song?.id);
@@ -143,7 +291,8 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     isBeating,
     isMuted,
     setIsMuted,
-    beatsPerMeasure,
+    volume: metronomeVolume,
+    setVolume: setMetronomeVolume,
     handleBpmChange,
     togglePlayStop
   } = useMetronomeAudio({
@@ -164,7 +313,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   } = useAttachments(song?.id || null, toast);
 
   // Backing track playback
-  const bt = useBackingTrack({
+  const {
+    play: btPlay, pause: btPause, stop: btStop, seek: btSeek, setVolume: btSetVolume,
+    isPlaying: btIsPlaying, isCountingIn: btIsCountingIn,
+    currentTime: btCurrentTime, duration: btDuration, buffered: btBuffered,
+    volume: btVolume, track: btTrack,
+  } = useBackingTrack({
     songId: song?.id || null,
     attachments,
     metronomeSound,
@@ -221,7 +375,10 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const setName = (name: string) => setFormState(s => ({ ...s, name }));
   const setArtist = (artist: string) => setFormState(s => ({ ...s, artist }));
   const setMusicalKey = (musicalKey: string) => setFormState(s => ({ ...s, musicalKey }));
-  const setMode = (mode: Mode) => setFormState(s => ({ ...s, mode }));
+  const setMode = (mode: Mode) => {
+    setFormState(s => ({ ...s, mode }));
+    onModeChange?.(mode);
+  };
 
   const handleSave = () => {
     const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpm));
@@ -295,9 +452,9 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     if (attachment.type === 'richtext') {
       setIsNewAttachment(false);
       setEditingAttachment(attachment);
-    } else if (attachment.type === 'image' && attachment.storageUrl) {
+    } else if (attachment.type === 'image' && (attachment.storageUrl || attachment.cloudFileId)) {
       setAnnotatingAttachment(attachment);
-    } else if (attachment.type === 'pdf' && attachment.storageUrl) {
+    } else if (attachment.type === 'pdf' && (attachment.storageUrl || attachment.cloudFileId)) {
       setAnnotatingPdf(attachment);
     } else if (attachment.type === 'drawing') {
       setIsNewDrawing(false);
@@ -615,33 +772,69 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
       togglePlayStop();
     }
     // Stop backing track if playing
-    bt.stop();
+    btStop();
     setAudioMode(newMode);
-  }, [isPlaying, togglePlayStop, bt]);
+  }, [isPlaying, togglePlayStop, btStop]);
 
   // Derive audio attachment and non-audio attachments for display
   const audioAttachment = attachments.find(a => a.type === 'audio') ?? null;
   const displayAttachments = attachments.filter(a => a.type !== 'audio');
 
-  const hasBackingTrack = audioAttachment != null;
-  const backingTrackControls = bt.track ? {
-    isPlaying: bt.isPlaying,
-    isCountingIn: bt.isCountingIn,
-    currentTime: bt.currentTime,
-    duration: bt.duration,
-    buffered: bt.buffered,
-    volume: bt.volume,
-    onPlay: () => bt.play(countInBars, bpm, timeSignature),
-    onPause: bt.pause,
-    onStop: bt.stop,
-    onSeek: bt.seek,
-    onVolumeChange: bt.setVolume,
-  } : undefined;
+  const hasBackingTrack = audioAttachment !== null;
 
-  // Expose save method to parent via ref
+  // Derive all audio attachments for transport source selection
+  const audioAttachments = attachments.filter(a => a.type === 'audio');
+  const audioAttachmentsRef = useRef(audioAttachments);
+  audioAttachmentsRef.current = audioAttachments;
+
+  // Report transport state to parent
+  const onTransportUpdateRef = useRef(onTransportUpdate);
+  onTransportUpdateRef.current = onTransportUpdate;
+
+  // Use audioAttachments.length as dep proxy (array ref changes every render)
+  const audioAttachmentsCount = audioAttachments.length;
+  const rafRef = useRef<number>(0);
+  useEffect(() => {
+    // Throttle to one update per animation frame (bt.currentTime changes ~60fps)
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      onTransportUpdateRef.current?.({
+        bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
+        audioMode, hasBackingTrack, audioAttachments: audioAttachmentsRef.current,
+        btIsPlaying, btIsCountingIn,
+        btCurrentTime, btDuration,
+        btBuffered, btVolume,
+        btActiveTrackId: btTrack?.id ?? null,
+        metronomeVolume,
+      });
+    });
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [bpm, timeSignature, isPlaying, currentBeat, isBeating, isMuted,
+      audioMode, hasBackingTrack, audioAttachmentsCount,
+      btIsPlaying, btIsCountingIn, btCurrentTime, btDuration,
+      btBuffered, btVolume, btTrack?.id, metronomeVolume]);
+
+  // Expose save and transport actions to parent via ref
   useImperativeHandle(ref, () => ({
     save: handleSave,
-  }));
+    togglePlay: togglePlayStop,
+    changeBpm: handleBpmChange,
+    toggleMute: () => setIsMuted(!isMuted),
+    changeAudioMode: handleAudioModeChange,
+    btPlay: () => btPlay(countInBars, bpm, timeSignature),
+    btPause,
+    btSeek,
+    btSetVolume,
+    setMetronomeVolume,
+    switchToEdit: () => setMode('edit'),
+    switchToPerformance: () => setMode('performance'),
+    changeName: setName,
+    changeArtist: setArtist,
+    getName: () => formState.name,
+    getArtist: () => formState.artist,
+  }), [handleSave, togglePlayStop, handleBpmChange, isMuted, setIsMuted,
+       handleAudioModeChange, btPlay, btPause, btSeek, btSetVolume,
+       countInBars, bpm, timeSignature, setMetronomeVolume, formState.name, formState.artist, setMode]);
 
   return (
     <>
@@ -653,27 +846,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           musicalKey={musicalKey}
           bpm={bpm}
           timeSignature={timeSignature}
-          isPlaying={isPlaying}
-          currentBeat={currentBeat}
-          isBeating={isBeating}
           setlist={setlist}
           songIndex={songIndex}
           showBack={showBack}
           onBack={onBack}
           onPrevSong={onPrevSong}
           onNextSong={onNextSong}
-          onTogglePlay={togglePlayStop}
-          onBpmChange={handleBpmChange}
           onSwitchToEdit={() => setMode('edit')}
           perfFontSize={perfFontSize}
           perfFontFamily={perfFontFamily}
-          isMuted={isMuted}
-          onToggleMute={() => setIsMuted(!isMuted)}
-          audioMode={audioMode}
-          onAudioModeChange={handleAudioModeChange}
-          hasBackingTrack={hasBackingTrack}
-          backingTrackControls={backingTrackControls}
-          countInBars={countInBars}
+          hideHeader={hidePerformanceHeader}
         />
       ) : (
         <EditMode
@@ -683,19 +865,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           musicalKey={musicalKey}
           bpm={bpm}
           timeSignature={timeSignature}
-          isPlaying={isPlaying}
-          currentBeat={currentBeat}
-          isBeating={isBeating}
-          beatsPerMeasure={beatsPerMeasure}
-          isMuted={isMuted}
           showBack={showBack}
           onBack={onBack}
           onNameChange={setName}
           onArtistChange={setArtist}
           onKeyChange={setMusicalKey}
           onBpmChange={handleBpmChange}
-          onTogglePlay={togglePlayStop}
-          onToggleMute={() => setIsMuted(!isMuted)}
           onSwitchToPerformance={() => setMode('performance')}
           onOpenTimeSigModal={() => setShowTimeSigModal(true)}
           onSave={handleSave}
@@ -704,33 +879,29 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           onEditAttachment={handleEditAttachment}
           onDeleteAttachment={deleteAttachment}
           onToggleDefaultAttachment={setDefault}
-          onRenameAttachment={(id, name) => updateAttachment(id, { name })}
           onReorderAttachments={reorderAttachments}
           onAddTextAttachment={handleAddText}
           onAddImageAttachment={handleAddImage}
           onAddCameraAttachment={handleAddCamera}
           onAddPdfAttachment={handleAddPdf}
           onAddDrawingAttachment={handleAddDrawing}
-          audioAttachment={audioAttachment}
+          audioAttachments={audioAttachments}
           onAddAudio={handleAddAudio}
           onDeleteAudio={deleteAttachment}
           isUploadingAudio={isUploading}
-          btIsPlaying={bt.isPlaying}
-          btCurrentTime={bt.currentTime}
-          btDuration={bt.duration}
-          btBuffered={bt.buffered}
-          onBtPlay={() => bt.play(countInBars, bpm, timeSignature)}
-          onBtPause={bt.pause}
-          onBtSeek={bt.seek}
-          audioMode={audioMode}
-          onAudioModeChange={handleAudioModeChange}
-          hasBackingTrack={hasBackingTrack}
-          backingTrackControls={backingTrackControls}
+          btIsPlaying={btIsPlaying}
+          btCurrentTime={btCurrentTime}
+          btDuration={btDuration}
+          btBuffered={btBuffered}
+          onBtPlay={() => btPlay(countInBars, bpm, timeSignature)}
+          onBtPause={btPause}
+          onBtSeek={btSeek}
           countInBars={countInBars}
           onCountInBarsChange={setCountInBars}
           isGuest={isGuest}
           onAddFromCloud={cloudAvailable ? handleAddFromCloud : undefined}
           onAddAudioFromCloud={cloudAvailable ? handleAddAudioFromCloud : undefined}
+          hideHeader={hidePerformanceHeader}
         />
       )}
 
@@ -764,34 +935,19 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
         onSave={handleDrawingSave}
       />
 
-      {annotatingAttachment && annotatingAttachment.storageUrl && (
-        <AnnotationOverlay
-          isOpen={true}
-          backgroundContent={
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={annotatingAttachment.storageUrl}
-              alt={annotatingAttachment.fileName || 'Image'}
-              className="max-w-full max-h-full object-contain"
-              style={{ width: annotatingAttachment.width, height: annotatingAttachment.height }}
-            />
-          }
-          baseWidth={annotatingAttachment.width || 800}
-          baseHeight={annotatingAttachment.height || 600}
-          initialAnnotations={annotatingAttachment.annotations}
+      {annotatingAttachment && (
+        <ResolvedAnnotationOverlay
+          attachment={annotatingAttachment}
           onSave={handleAnnotationSave}
-          title={annotatingAttachment.name || annotatingAttachment.fileName || 'Annotate'}
+          onCancel={() => setAnnotatingAttachment(null)}
         />
       )}
 
-      {annotatingPdf && annotatingPdf.storageUrl && (
-        <PdfAnnotationOverlay
-          isOpen={true}
-          storageUrl={annotatingPdf.storageUrl}
-          pageCount={annotatingPdf.pageCount}
-          initialPageAnnotations={annotatingPdf.pageAnnotations}
+      {annotatingPdf && (
+        <ResolvedPdfAnnotationOverlay
+          attachment={annotatingPdf}
           onSave={handlePdfAnnotationSave}
-          title={annotatingPdf.name || annotatingPdf.fileName || 'Annotate PDF'}
+          onCancel={() => setAnnotatingPdf(null)}
         />
       )}
 

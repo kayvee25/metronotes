@@ -28,6 +28,24 @@ export type SetlistUpdate = Partial<SetlistInput>;
 
 export type AttachmentType = 'richtext' | 'image' | 'pdf' | 'drawing' | 'audio';
 
+export type AssetType = 'image' | 'pdf' | 'audio' | 'drawing' | 'richtext';
+
+export interface Asset {
+  id: string;
+  name: string;
+  type: AssetType;
+  mimeType: string | null;
+  size: number | null;
+  storageUrl: string | null;
+  content?: object;
+  drawingData?: DrawingData;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AssetInput = Omit<Asset, 'id' | 'createdAt' | 'updatedAt'>;
+export type AssetUpdate = Partial<AssetInput>;
+
 export interface Stroke {
   id: string;
   points: Array<[number, number, number]>; // [x, y, pressure]
@@ -51,6 +69,7 @@ export interface Attachment {
   id: string;
   type: AttachmentType;
   name?: string;
+  assetId?: string;
   order: number;
   isDefault: boolean;
 

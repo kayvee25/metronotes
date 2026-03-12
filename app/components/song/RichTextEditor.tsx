@@ -118,7 +118,7 @@ export default function RichTextEditor({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-[var(--background)] flex flex-col max-w-3xl mx-auto">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <button

@@ -23,6 +23,8 @@ interface UseMetronomeAudioReturn {
   isBeating: boolean;
   isMuted: boolean;
   setIsMuted: (muted: boolean) => void;
+  volume: number;
+  setVolume: (volume: number) => void;
   beatsPerMeasure: number;
   handleBpmChange: (newBpm: number) => void;
   togglePlayStop: () => void;
@@ -37,6 +39,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
   const [currentBeat, setCurrentBeat] = useState(0);
   const [isBeating, setIsBeating] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextNoteTimeRef = useRef<number>(0);
@@ -45,6 +48,7 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
   const animationFrameRef = useRef<number | null>(null);
   const schedulerRef = useRef<(() => void) | undefined>(undefined);
   const mutedRef = useRef<boolean>(false);
+  const volumeRef = useRef<number>(1);
   const soundRef = useRef<MetronomeSound>(sound);
 
   const beatsPerMeasure = parseInt(timeSignature.split('/')[0]) || 4;
@@ -76,17 +80,21 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     };
   }, []);
 
-  // Update muted ref when muted state changes
+  // Update muted/volume refs when state changes
   useEffect(() => {
     mutedRef.current = isMuted;
   }, [isMuted]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
 
   // Schedule next note using extracted audio-clicks module
   const scheduleNote = useCallback(
     (beatNumber: number, time: number) => {
       const ctx = audioContextRef.current;
       if (!ctx) return;
-      scheduleClick(ctx, beatNumber, time, soundRef.current, mutedRef.current);
+      scheduleClick(ctx, beatNumber, time, soundRef.current, mutedRef.current, volumeRef.current);
     },
     []
   );
@@ -201,6 +209,8 @@ export function useMetronomeAudio(options: UseMetronomeAudioOptions = {}): UseMe
     isBeating,
     isMuted,
     setIsMuted,
+    volume,
+    setVolume,
     beatsPerMeasure,
     handleBpmChange,
     togglePlayStop

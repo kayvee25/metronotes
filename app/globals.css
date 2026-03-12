@@ -36,14 +36,14 @@
   --color-accent: var(--accent);
   --color-accent-danger: var(--accent-danger);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-instrument-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-instrument-sans), system-ui, sans-serif;
 }
 
 /* Toast animation */
@@ -120,6 +120,16 @@ body {
   background: none;
   padding: 0;
   border-radius: 0;
+}
+
+/* Smaller thumb on range sliders */
+input[type="range"]::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
 }
 
 /* Hide scrollbar for toolbar */

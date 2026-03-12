@@ -1,4 +1,4 @@
-import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate } from '../types';
+import { Song, Setlist, SongInput, SongUpdate, SetlistInput, SetlistUpdate, Attachment, AttachmentInput, AttachmentUpdate, Asset, AssetUpdate } from '../types';
 import { generateId, getTimestamp } from './utils';
 import { STORAGE_KEYS } from './constants';
 
@@ -24,6 +24,12 @@ export interface StorageAdapter {
   deleteAttachment(songId: string, attachmentId: string): boolean;
   deleteAllAttachments(songId: string): void;
   reorderAttachments(songId: string, orderedIds: string[]): void;
+
+  // Assets
+  getAssets(): Asset[];
+  createAsset(asset: Asset): void;
+  updateAsset(id: string, update: AssetUpdate): void;
+  deleteAsset(id: string): void;
 }
 
 class LocalStorageAdapter implements StorageAdapter {
@@ -217,6 +223,38 @@ class LocalStorageAdapter implements StorageAdapter {
   private saveAttachments(songId: string, attachments: Attachment[]): void {
     if (!this.isClient) return;
     localStorage.setItem(this.attachmentsKey(songId), JSON.stringify(attachments));
+  }
+
+  // Assets
+  getAssets(): Asset[] {
+    if (!this.isClient) return [];
+    const data = localStorage.getItem(STORAGE_KEYS.ASSETS);
+    return data ? JSON.parse(data) : [];
+  }
+
+  createAsset(asset: Asset): void {
+    const assets = this.getAssets();
+    assets.push(asset);
+    this.saveAssets(assets);
+  }
+
+  updateAsset(id: string, update: AssetUpdate): void {
+    const assets = this.getAssets();
+    const index = assets.findIndex((a) => a.id === id);
+    if (index === -1) return;
+    assets[index] = { ...assets[index], ...update, updatedAt: getTimestamp() };
+    this.saveAssets(assets);
+  }
+
+  deleteAsset(id: string): void {
+    const assets = this.getAssets();
+    const filtered = assets.filter((a) => a.id !== id);
+    this.saveAssets(filtered);
+  }
+
+  private saveAssets(assets: Asset[]): void {
+    if (!this.isClient) return;
+    localStorage.setItem(STORAGE_KEYS.ASSETS, JSON.stringify(assets));
   }
 }
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Attachment } from '../../types';
 import { isCloudLinked } from '../../lib/cloud-providers/types';
 
@@ -9,7 +8,6 @@ interface AttachmentCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onToggleDefault: () => void;
-  onNameChange: (name: string) => void;
   dragHandleProps?: Record<string, unknown>;
 }
 
@@ -34,7 +32,6 @@ export default function AttachmentCard({
   onEdit,
   onDelete,
   onToggleDefault,
-  onNameChange,
   dragHandleProps,
 }: AttachmentCardProps) {
   const isText = attachment.type === 'richtext';
@@ -43,7 +40,7 @@ export default function AttachmentCard({
   const isMedia = attachment.type === 'image' || isPdf;
   const isCloud = isCloudLinked(attachment);
   const isUploading = isMedia && !attachment.storageUrl && !isCloud;
-  const canEdit = isText || isDrawing || (isMedia && !isCloud);
+  const canEdit = isText || isDrawing || isMedia;
   const preview = isText
     ? getTextPreview(attachment.content)
     : isDrawing
@@ -53,8 +50,6 @@ export default function AttachmentCard({
         : isPdf
           ? (attachment.pageCount ? `${attachment.pageCount} ${attachment.pageCount === 1 ? 'page' : 'pages'}` : 'PDF document')
           : attachment.fileName || 'Image';
-  const [localName, setLocalName] = useState(attachment.name || '');
-
   return (
     <div className="flex items-center gap-2 px-3 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl">
       {/* Drag handle */}
@@ -120,18 +115,9 @@ export default function AttachmentCard({
 
       {/* Name + preview */}
       <div className="flex-1 min-w-0">
-        <input
-          type="text"
-          value={localName}
-          onChange={(e) => setLocalName(e.target.value)}
-          onBlur={() => {
-            if (localName !== (attachment.name || '')) {
-              onNameChange(localName);
-            }
-          }}
-          placeholder={isText ? 'Text' : isDrawing ? 'Drawing' : isPdf ? 'PDF' : 'Image'}
-          className="text-sm text-[var(--foreground)] bg-transparent w-full truncate placeholder:text-[var(--foreground)] focus:placeholder:text-[var(--muted)] outline-none"
-        />
+        <p className="text-sm text-[var(--foreground)] truncate">
+          {attachment.name || (isText ? 'Text' : isDrawing ? 'Drawing' : isPdf ? 'PDF' : 'Image')}
+        </p>
         <p className="text-xs text-[var(--muted)] truncate">{preview}</p>
       </div>
 
@@ -152,8 +138,8 @@ export default function AttachmentCard({
         </svg>
       </button>
 
-      {/* Edit button — hidden for cloud-linked images/PDFs (no annotation support) */}
-      {canEdit && (
+      {/* Edit button — or Open in Drive for cloud-linked files */}
+      {canEdit ? (
         <button
           onClick={onEdit}
           className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-[var(--background)] flex items-center justify-center"
@@ -163,7 +149,7 @@ export default function AttachmentCard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
         </button>
-      )}
+      ) : null}
 
       {/* Delete button */}
       <button

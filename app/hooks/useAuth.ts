@@ -161,6 +161,7 @@ export function useAuthProvider(): AuthContextValue {
       localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
       localStorage.removeItem(STORAGE_KEYS.SONGS);
       localStorage.removeItem(STORAGE_KEYS.SETLISTS);
+      localStorage.removeItem('metronotes_asset_migration_done');
       // Clear all cached/local data so next session starts clean
       await Promise.all([clearAllCache(), clearAllGuestBlobs()]);
       setAuthState('unauthenticated');

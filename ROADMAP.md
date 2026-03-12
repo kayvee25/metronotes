@@ -116,6 +116,7 @@ Specified but not yet implemented. Tracked here to prevent silent accumulation.
 - Link existing assets to songs from Files tab ("Add to song...")
 - Volume control in transport bar (currently in FAB — needs a new home)
 - Count-in bars config (currently in FAB — move to edit panel or transport settings)
+- Lazy-load asset linkage in `useAssetLinkage` — currently fetches all attachments for all songs on mount, causing a burst of Firestore reads even if user never visits Files tab. Paginate or defer until Files tab is opened.
 
 ### From Release 1: Live Session
 - Peer-assisted transfer (BitTorrent-like) for scaling beyond 8 members

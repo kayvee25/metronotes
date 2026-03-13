@@ -50,8 +50,6 @@ interface EditModeProps {
   onBtPlay?: () => void;
   onBtPause?: () => void;
   onBtSeek?: (time: number) => void;
-  countInBars?: number;
-  onCountInBarsChange?: (bars: number) => void;
   isGuest?: boolean;
   onAddFromCloud?: (providerId: CloudProviderId) => void;
   onAddAudioFromCloud?: (providerId: CloudProviderId) => void;
@@ -96,8 +94,6 @@ export default function EditMode({
   onBtPlay,
   onBtPause,
   onBtSeek,
-  countInBars,
-  onCountInBarsChange,
   isGuest = false,
   onAddFromCloud,
   onAddAudioFromCloud,
@@ -326,8 +322,6 @@ export default function EditMode({
           onBtPlay={onBtPlay}
           onBtPause={onBtPause}
           onBtSeek={onBtSeek}
-          countInBars={countInBars}
-          onCountInBarsChange={onCountInBarsChange}
         />
       </div>
 

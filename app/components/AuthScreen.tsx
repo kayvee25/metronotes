@@ -19,12 +19,14 @@ export default function AuthScreen() {
   const [view, setView] = useState<AuthView>('main');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const switchView = (v: AuthView) => {
     setView(v);
     setEmail('');
     setPassword('');
+    setDisplayName('');
     clearAuthError();
   };
 
@@ -38,7 +40,7 @@ export default function AuthScreen() {
   const handleEmailSignUp = async () => {
     if (!email.trim() || !password) return;
     setIsSubmitting(true);
-    await signUpWithEmail(email.trim(), password);
+    await signUpWithEmail(email.trim(), password, displayName);
     setIsSubmitting(false);
   };
 
@@ -179,6 +181,18 @@ export default function AuthScreen() {
         {view === 'email-signup' && (
           <div className="space-y-4">
             <div>
+              <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">Display Name</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, handleEmailSignUp)}
+                placeholder="Your name"
+                className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
+                autoFocus
+              />
+            </div>
+            <div>
               <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-2">Email</label>
               <input
                 type="email"
@@ -187,7 +201,6 @@ export default function AuthScreen() {
                 onKeyDown={(e) => handleKeyDown(e, handleEmailSignUp)}
                 placeholder="your@email.com"
                 className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
-                autoFocus
               />
             </div>
             <div>

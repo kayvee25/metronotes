@@ -50,6 +50,7 @@ plan*.md
 REFACTOR.md
 ROADMAP.md
 FIREBASE_STORAGE_SETUP.md
+TESTING_ANALYSIS.md
 
 # PWA files (generated at build time)
 /public/sw.js

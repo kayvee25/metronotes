@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { SongViewHandle } from './SongView';
 import LibraryTab, { LibrarySubTab } from './LibraryTab';
 import LiveTab from './LiveTab';
@@ -8,18 +8,23 @@ import LivePerformanceView from './live/LivePerformanceView';
 import Settings from './Settings';
 import BottomNav, { Tab } from './BottomNav';
 import AuthScreen from './AuthScreen';
+import { useSessionAttachments } from '../hooks/useSessionAttachments';
 import EmailVerificationScreen from './EmailVerificationScreen';
-import { Song, Setlist, SongInput } from '../types';
+import { Song, Setlist, SongInput, Attachment, Asset } from '../types';
 import { useSongs } from '../hooks/useSongs';
 import { useAssets } from '../hooks/useAssets';
+import { useHostSession } from '../hooks/useHostSession';
+import { useJoinSession } from '../hooks/useJoinSession';
 import { useAuthProvider, useAuth, AuthContext } from '../hooks/useAuth';
 import { usePerformanceSettings } from '../hooks/usePerformanceSettings';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAssetLinkage } from '../hooks/useAssetLinkage';
-import { migrateLocalToFirestore, firestoreGetSongs, firestoreGetAttachments, firestoreClearAttachmentAssetId } from '../lib/firestore';
-import { migrateAttachmentsToAssets, migrateGuestAttachmentsToAssets } from '../lib/asset-migration';
+import { migrateLocalToFirestore, firestoreGetSongs, firestoreGetAttachments } from '../lib/firestore';
+import { migrateAttachmentsToAssets, migrateGuestAttachmentsToAssets, migrateAssetStoragePaths } from '../lib/asset-migration';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/constants';
+import { fetchCloudBlob } from '../lib/cloud-providers/fetch-cloud-blob';
+import { isCloudLinked } from '../lib/cloud-providers/types';
 import { ConfirmProvider } from './ui/ConfirmModal';
 import Modal from './ui/Modal';
 import { ToastProvider, useToast } from './ui/Toast';
@@ -51,6 +56,49 @@ function AppInner() {
   const { linkage: assetLinkage, refresh: refreshAssetLinkage } = useAssetLinkage(songs);
   const perfSettings = usePerformanceSettings();
 
+  // Live session hooks (lifted to App level for cross-tab access)
+  const hostSession = useHostSession();
+  const joinSession = useJoinSession();
+
+  // Member performance view: derive song + attachments from join session
+  const memberQueueItem = useMemo(() => {
+    if (joinSession.connectionStatus !== 'connected' || !joinSession.session) return null;
+    const idx = joinSession.session.currentIndex;
+    if (idx == null) return null;
+    return joinSession.session.queue[idx] ?? null;
+  }, [joinSession.connectionStatus, joinSession.session]);
+
+  const memberSong: Song | null = useMemo(() => {
+    if (!memberQueueItem) return null;
+    return memberQueueItem.song;
+  }, [memberQueueItem]);
+
+  // Allow member to go back to waiting room from performance view
+  const [memberShowPerformance, setMemberShowPerformance] = useState(true);
+  // Auto-show performance view when host changes songs
+  const prevMemberSongIdRef = useRef<string | null>(null);
+  if (memberSong?.id !== prevMemberSongIdRef.current) {
+    prevMemberSongIdRef.current = memberSong?.id ?? null;
+    if (memberSong) {
+      setMemberShowPerformance(true);
+    }
+  }
+
+  const memberAttachmentsMeta = useMemo(
+    () => memberQueueItem?.attachments ?? [],
+    [memberQueueItem]
+  );
+
+  const { resolvedAttachments: memberAttachments } =
+    useSessionAttachments(memberSong?.id ?? null, memberAttachmentsMeta);
+
+  const memberSessionQueue = useMemo(() => {
+    if (!joinSession.session) return undefined;
+    return joinSession.session.queue.map(q => ({ id: q.songId, name: q.song.name, artist: q.song.artist }));
+  }, [joinSession.session]);
+
+  const memberSessionQueueIndex = joinSession.session?.currentIndex ?? undefined;
+
   // Migrate guest attachments to assets (one-time, idempotent)
   const guestAssetMigrationDone = useRef(false);
   useEffect(() => {
@@ -64,9 +112,10 @@ function AppInner() {
     }
   }, [isGuest, songsLoading, songs]);
 
-  // Keep screen on during performance mode
+  // Keep screen on during performance mode or active session
   const isPerforming = activeTab === 'live' && activeSong != null;
-  useWakeLock(perfSettings.keepScreenOn, isPerforming);
+  const isInSession = hostSession.isActive || (joinSession.connectionStatus !== 'idle' && joinSession.connectionStatus !== 'ended');
+  useWakeLock(perfSettings.keepScreenOn, isPerforming || isInSession);
 
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState(false);
@@ -127,6 +176,14 @@ function AppInner() {
       setPendingNavigation({ type: 'back' });
       return;
     }
+    // If in a live session, stay on the live tab (go back to dashboard)
+    if (activeTab === 'live' && hostSession.isActive) {
+      setActiveSong(null);
+      setActiveSetlist(null);
+      setSetlistIndex(0);
+      setIsDirty(false);
+      return;
+    }
     if (activeSetlist) {
       setReturnToSetlistId(activeSetlist.id);
       setLibrarySubTab('setlists');
@@ -165,6 +222,12 @@ function AppInner() {
   };
 
   const handleSelectSongFromQueue = (song: Song, index: number) => {
+    // In a live session, also update session currentIndex so members follow
+    if (hostSession.isActive) {
+      hostSession.navigateToSong(index);
+      setActiveSong(song);
+      return;
+    }
     if (activeSetlist) {
       setSetlistIndex(index);
     } else {
@@ -173,17 +236,51 @@ function AppInner() {
   };
 
   const handleSaveSong = (data: SongInput) => {
+    let savedSong: Song | undefined;
     if (currentSong) {
       const updated = updateSong(currentSong.id, data);
       if (updated) {
         setActiveSong(updated);
+        savedSong = updated;
       }
     } else {
       const newSong = createSong(data);
       if (!newSong) return;
       setActiveSong(newSong);
+      savedSong = newSong;
     }
     setIsDirty(false);
+
+    // Broadcast song update to session members if song is in queue
+    if (savedSong && hostSession.isActive && hostSession.session?.queue.some(q => q.songId === savedSong!.id)) {
+      const songId = savedSong.id;
+      const song = savedSong;
+      (async () => {
+        try {
+          let atts: Attachment[];
+          if (isGuest) {
+            atts = storage.getAttachments(songId);
+          } else if (user?.uid) {
+            atts = await firestoreGetAttachments(user.uid, songId);
+          } else {
+            atts = [];
+          }
+          // Build assets map for any new/updated attachments
+          const songAssetsMap = new Map<string, Asset>();
+          for (const att of atts) {
+            if (att.assetId) {
+              const asset = assets.find(a => a.id === att.assetId);
+              if (asset) {
+                songAssetsMap.set(asset.id, asset);
+              }
+            }
+          }
+          hostSession.broadcastSongUpdate(song, atts, songAssetsMap);
+        } catch {
+          // Non-critical — members will have stale data until next navigate
+        }
+      })();
+    }
 
     const nav = pendingNavRef.current;
     if (nav) {
@@ -265,6 +362,7 @@ function AppInner() {
 
   const handleDeleteAsset = async (id: string) => {
     // Cascade: clear assetId from all attachments referencing this asset
+    const { firestoreClearAttachmentAssetId, firestoreGetAttachments: getAtts } = await import('../lib/firestore');
     const links = assetLinkage[id] || [];
     let cascadeErrors = 0;
     if (isGuest) {
@@ -279,7 +377,7 @@ function AppInner() {
     } else if (user?.uid) {
       for (const link of links) {
         try {
-          const attachments = await firestoreGetAttachments(user.uid, link.songId);
+          const attachments = await getAtts(user.uid, link.songId);
           for (const att of attachments) {
             if (att.assetId === id) {
               await firestoreClearAttachmentAssetId(user.uid, link.songId, att.id).catch((err) => {
@@ -303,6 +401,97 @@ function AppInner() {
   const handleCreateSongFromLive = () => {
     setActiveTab('library');
   };
+
+  // Add songs to live session queue (from Library)
+  const handleAddSongsToSession = useCallback(
+    async (songsToAdd: Song[]) => {
+      if (!hostSession.isActive) return;
+
+      // Load attachments for each song
+      const attachmentsMap = new Map<string, Attachment[]>();
+      const assetsMap = new Map<string, Asset>();
+
+      for (const song of songsToAdd) {
+        try {
+          let atts: Attachment[];
+          if (isGuest) {
+            atts = storage.getAttachments(song.id);
+          } else if (user?.uid) {
+            atts = await firestoreGetAttachments(user.uid, song.id);
+          } else {
+            atts = [];
+          }
+
+          // For cloud-linked attachments without an assetId, download the blob
+          // and create a synthetic asset so it flows through the transfer pipeline
+          for (let i = 0; i < atts.length; i++) {
+            const att = atts[i];
+            if (!att.assetId && isCloudLinked(att)) {
+              try {
+                const blob = await fetchCloudBlob(att.cloudProvider!, att.cloudFileId!, att.id);
+                const arrayBuffer = await blob.arrayBuffer();
+                const syntheticId = crypto.randomUUID();
+                const syntheticAsset: Asset = {
+                  id: syntheticId,
+                  name: att.cloudFileName || att.name || `${att.type} asset`,
+                  type: att.type as Asset['type'],
+                  mimeType: att.cloudMimeType || blob.type || null,
+                  size: arrayBuffer.byteLength,
+                  storageUrl: null,
+                  storagePath: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+                assetsMap.set(syntheticId, syntheticAsset);
+                hostSession.registerCloudBlob(syntheticId, arrayBuffer);
+                // Tag the attachment so enrichQueueWithManifests picks it up
+                atts[i] = { ...att, assetId: syntheticId };
+              } catch {
+                // Cloud auth unavailable or download failed — skip this attachment
+              }
+            }
+          }
+
+          attachmentsMap.set(song.id, atts);
+
+          // Collect referenced assets
+          for (const att of atts) {
+            if (att.assetId) {
+              const asset = assets.find(a => a.id === att.assetId);
+              if (asset) {
+                assetsMap.set(asset.id, asset);
+              }
+            }
+          }
+        } catch {
+          attachmentsMap.set(song.id, []);
+        }
+      }
+
+      hostSession.addSongsToQueue(songsToAdd, attachmentsMap, assetsMap);
+      toast(`Added ${songsToAdd.length} song${songsToAdd.length > 1 ? 's' : ''} to session`, 'success');
+    },
+    [hostSession, isGuest, user?.uid, assets, toast]
+  );
+
+  const handleSwitchToLibrary = () => {
+    setActiveTab('library');
+  };
+
+  const handleHostNavigateToSong = useCallback((queueIndex: number) => {
+    hostSession.navigateToSong(queueIndex);
+    const queueItem = hostSession.session?.queue[queueIndex];
+    if (queueItem) {
+      const song = songs.find(s => s.id === queueItem.songId);
+      if (song) {
+        setActiveSong(song);
+        setActiveSetlist(null);
+        setEditModeOnOpen(false);
+        setIsDirty(false);
+        history.pushState(null, '', '');
+      }
+    }
+  }, [hostSession, songs]);
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -329,6 +518,9 @@ function AppInner() {
             onDeleteAsset={handleDeleteAsset}
             initialSubTab={librarySubTab}
             onSubTabChange={setLibrarySubTab}
+            isHostingSession={hostSession.isActive}
+            connectedPeerCount={hostSession.peers.filter(p => p.status === 'connected').length}
+            onAddSongsToSession={handleAddSongsToSession}
           />
         )}
         {activeTab === 'live' && (
@@ -349,11 +541,76 @@ function AppInner() {
               metronomeSound={perfSettings.metronomeSound}
               songViewRef={songViewRef}
               initialEditMode={editModeOnOpen}
+              sessionQueue={hostSession.isActive ? hostSession.session?.queue.map(q => ({ id: q.songId, name: q.song.name, artist: q.song.artist })) : undefined}
+              sessionQueueIndex={hostSession.isActive ? (hostSession.session?.currentIndex ?? undefined) : undefined}
+              onBeat={hostSession.isActive ? hostSession.broadcastBeat : undefined}
+              onMetronomeStateChange={hostSession.isActive ? (state) => {
+                hostSession.updateMetronomeState({
+                  ...state,
+                  networkTimeAtLastBeat: performance.now(),
+                  beatNumber: 0,
+                });
+              } : undefined}
             />
+          ) : memberSong && memberShowPerformance ? (
+            <div className="relative h-full">
+              <LivePerformanceView
+                song={memberSong}
+                songs={[]}
+                onBack={() => setMemberShowPerformance(false)}
+                onSave={() => {/* read-only */}}
+                setlist={null}
+                songIndex={0}
+                onPrevSong={() => {}}
+                onNextSong={() => {}}
+                onDirtyChange={() => {}}
+                onSelectSongFromQueue={() => {}}
+                perfFontSize={perfSettings.fontSize}
+                perfFontFamily={perfSettings.fontFamily}
+                metronomeSound={perfSettings.metronomeSound}
+                readOnly
+                externalAttachments={memberAttachments}
+                sessionQueue={memberSessionQueue}
+                sessionQueueIndex={memberSessionQueueIndex}
+                externalTransport={{
+                  currentBeat: joinSession.currentBeat,
+                  isBeating: joinSession.isBeating,
+                  isPlaying: joinSession.session?.metronome?.isPlaying ?? false,
+                }}
+              />
+              {/* Reconnection banner overlay for member performance view */}
+              {joinSession.connectionStatus === 'reconnecting' && (
+                <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/30 backdrop-blur-sm">
+                  <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-sm font-medium text-amber-400">
+                    Connection lost — Reconnecting...
+                  </span>
+                </div>
+              )}
+              {joinSession.connectionStatus === 'disconnected' && (
+                <div className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 py-3 bg-red-500/10 border-b border-red-500/30 backdrop-blur-sm">
+                  <span className="text-sm font-medium text-red-400">
+                    Disconnected
+                  </span>
+                  <button
+                    onClick={joinSession.reconnect}
+                    className="px-4 py-1.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:brightness-110 active:scale-95 transition-all"
+                  >
+                    Tap to rejoin
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <LiveTab
               hasSongs={songs.length > 0}
+              songs={songs}
               onCreateSong={handleCreateSongFromLive}
+              hostSession={hostSession}
+              joinSession={joinSession}
+              onAddSongsToSession={handleAddSongsToSession}
+              onNavigateToSong={handleHostNavigateToSong}
+              onMemberShowPerformance={memberSong ? () => setMemberShowPerformance(true) : undefined}
             />
           )
         )}
@@ -373,8 +630,8 @@ function AppInner() {
         )}
       </main>
 
-      {/* Hide bottom nav when in live mode with active song (full-screen overlays) */}
-      {!(activeTab === 'live' && currentSong) && (
+      {/* Hide bottom nav when in live mode with active song or member performance view */}
+      {!(activeTab === 'live' && (currentSong || (memberSong && memberShowPerformance))) && (
         <BottomNav
           activeTab={activeTab}
           onTabChange={handleTabChange}
@@ -440,6 +697,14 @@ export default function App() {
         const songs = await firestoreGetSongs(authValue.user!.uid);
         await migrateAttachmentsToAssets(authValue.user!.uid, songs);
         localStorage.setItem('metronotes_asset_migration_done', 'true');
+      }
+
+      // Patch existing assets missing storagePath (idempotent)
+      const storagePathMigrationDone = localStorage.getItem('metronotes_asset_storagepath_done') === 'true';
+      if (!storagePathMigrationDone) {
+        const songs = await firestoreGetSongs(authValue.user!.uid);
+        await migrateAssetStoragePaths(authValue.user!.uid, songs);
+        localStorage.setItem('metronotes_asset_storagepath_done', 'true');
       }
 
       setMigrationState('done');

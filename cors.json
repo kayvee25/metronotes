@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["*"],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600,
+    "_comment": "Dev only — for prod, use cors.prod.json"
+  }
+]

@@ -42,7 +42,7 @@
 - Guest-to-authenticated data migration
 
 ### Backing Tracks
-- MP3 backing tracks with integrated playback and count-in
+- MP3 backing tracks with integrated playback
 - Per-song audio mode (metronome / backing track / off)
 - Transport controls (seek bar, volume) in edit and performance mode
 - PlayFAB unified audio control surface
@@ -65,14 +65,14 @@
 ### Release 0: Foundation & Redesign
 Full UX redesign + asset foundation layer. Restructures navigation to Library (Songs | Setlists | Files) | Live | Settings. Replaces SongView overlay with a dedicated Live tab for performance + editing. Removes PlayFAB in favor of header-integrated transport controls with multi-audio-track selection. Extracts attachments into independent assets. Queue system with dropdown. Slide-up edit panel. Multiple rich text and audio files per song.
 
-**Status:** In progress (branch: `release-0-foundation-redesign`, Phases 1-6 complete + PR review fixes)
+**Status:** Shipped (PR #9, merged 2026-03-12)
 
 **Spec:** `spec-collaboration.md` (asset model sections) | **Plan:** `plan-release-0-foundation.md` (6 phases)
 
 ### Release 1: Live Session
-WebRTC-based real-time session sync. Bandleader starts a session from their own songs/setlists, members join via room code. Songs sync in real-time, assets transfer P2P. Firestore signaling for connection establishment. Session assets stored in separate IndexedDB store, cleaned up on session end. Guests can join sessions (no auth needed for WebRTC peers) but cannot host.
+WebRTC-based real-time session sync. Bandleader starts a session from their own songs/setlists, members join via room code. Songs sync in real-time, assets transfer P2P. Firestore signaling for connection establishment (Google free STUN servers for NAT traversal). Session assets stored in separate IndexedDB store, cleaned up on session end. Guests can join sessions (no auth needed for WebRTC peers) but cannot host. Session persistence across app restart for reliability. Display names for guest members (persisted), auto-use account name for signed-in users.
 
-**Status:** Not started. Depends on Release 0.
+**Status:** Not started. Release 0 shipped — ready to begin.
 
 **Spec:** `spec-live-session.md` | **Plan:** `plan-release-1-live-session.md` (5 phases)
 
@@ -115,14 +115,13 @@ Specified but not yet implemented. Tracked here to prevent silent accumulation.
 - Asset search/filter in Files tab
 - Link existing assets to songs from Files tab ("Add to song...")
 - Volume control in transport bar (currently in FAB — needs a new home)
-- Count-in bars config (currently in FAB — move to edit panel or transport settings)
+- Count-in for backing tracks (bars-based count-in with metronome clicks before audio playback — removed in R1 to simplify, revisit if users request)
 - Lazy-load asset linkage in `useAssetLinkage` — currently fetches all attachments for all songs on mount, causing a burst of Firestore reads even if user never visits Files tab. Paginate or defer until Files tab is opened.
 
 ### From Release 1: Live Session
 - Peer-assisted transfer (BitTorrent-like) for scaling beyond 8 members
 - Cascading/tree topology for 15+ members
-- TURN server fallback for restrictive networks
-- Session persistence across app restart
+- TURN server fallback for restrictive networks (~15% of networks with strict NATs/firewalls)
 - Member management (kick, approve/deny joins)
 - Smart prefetch prioritization
 

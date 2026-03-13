@@ -37,6 +37,10 @@ interface LibraryTabProps {
   onDeleteAsset: (id: string) => void;
   initialSubTab?: LibrarySubTab;
   onSubTabChange?: (subTab: LibrarySubTab) => void;
+  // Live session (Phase 3)
+  isHostingSession?: boolean;
+  connectedPeerCount?: number;
+  onAddSongsToSession?: (songs: Song[]) => void;
 }
 
 const SUB_TABS: { id: LibrarySubTab; label: string }[] = [
@@ -65,6 +69,9 @@ export default function LibraryTab({
   onDeleteAsset,
   initialSubTab,
   onSubTabChange,
+  isHostingSession,
+  connectedPeerCount = 0,
+  onAddSongsToSession,
 }: LibraryTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<LibrarySubTab>(
     initialSubTab || (initialViewSetlistId ? 'setlists' : 'songs')
@@ -130,6 +137,19 @@ export default function LibraryTab({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Live session banner */}
+      {isHostingSession && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)]/10 border-b border-[var(--accent)]/20">
+          <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
+          <span className="text-xs font-medium text-[var(--accent)]">
+            Live · {connectedPeerCount} connected
+          </span>
+          <span className="text-xs text-[var(--muted)] ml-auto">
+            Tap song to add to session
+          </span>
+        </div>
+      )}
+
       {/* Sync bar */}
       {!isGuest && (
         <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
@@ -184,6 +204,7 @@ export default function LibraryTab({
             onCreateSong={onCreateSong}
             onQuickAddSong={onQuickAddSong}
             isGuest={isGuest}
+            onAddToSession={isHostingSession ? onAddSongsToSession : undefined}
           />
         )}
         {activeSubTab === 'setlists' && (

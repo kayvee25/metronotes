@@ -12,6 +12,7 @@ import {
   firestoreDeleteAllAttachments,
   firestoreReorderAttachments,
   firestoreCreateAsset,
+  firestoreUpdateAsset,
   firestoreDeleteAsset,
 } from '../lib/firestore';
 import { deleteAttachmentFile } from '../lib/storage-firebase';
@@ -153,6 +154,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
       mimeType: 'application/json',
       size: null,
       storageUrl: null,
+      storagePath: null,
       content: richContent,
     };
 
@@ -216,6 +218,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
       ),
       size: input.fileSize || input.cloudFileSize || null,
       storageUrl: input.storageUrl || null,
+      storagePath: null,
       ...(input.type === 'drawing' && input.drawingData ? { drawingData: input.drawingData } : {}),
     };
 
@@ -281,12 +284,34 @@ export function useAttachments(songId: string | null, onError?: (message: string
         firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
       });
     }
-
-    // Auto-update offline cache if storageUrl changed
-    if (update.storageUrl) {
-      downloadAndCache(attachmentId, update.storageUrl).catch(() => {});
-    }
   }, [songId, isGuest, userId]);
+
+  /** Update the linked Asset's storage fields after file upload, and set runtime storageUrl on the attachment */
+  const updateAssetStorage = useCallback((attachmentId: string, storageUrl: string, storagePath: string) => {
+    if (!songId) return;
+
+    // Set runtime storageUrl on the in-memory attachment
+    setAttachments(prev => prev.map(a =>
+      a.id === attachmentId ? { ...a, storageUrl, updatedAt: new Date().toISOString() } : a
+    ));
+
+    const att = attachments.find(a => a.id === attachmentId);
+    if (!att?.assetId) return;
+
+    if (isGuest) {
+      storage.updateAsset(att.assetId, { storageUrl, storagePath });
+      return;
+    }
+
+    if (userId) {
+      firestoreUpdateAsset(userId, att.assetId, { storageUrl, storagePath }).catch((err) => {
+        console.error('Asset storage update failed:', err);
+      });
+    }
+
+    // Update offline cache
+    downloadAndCache(attachmentId, storageUrl).catch(() => {});
+  }, [songId, isGuest, userId, attachments]);
 
   const deleteAttachment = useCallback((attachmentId: string) => {
     if (!songId) return;
@@ -315,8 +340,8 @@ export function useAttachments(songId: string | null, onError?: (message: string
     });
 
     if (userId) {
-      // Delete file from Storage if it's an image
-      if (deleted?.storagePath) {
+      // Delete file from Storage if it has a binary asset
+      if (deleted?.assetId && ['image', 'pdf', 'audio'].includes(deleted.type)) {
         deleteAttachmentFile(userId, songId, attachmentId).catch(() => {});
       }
       const deletePromise = firestoreDeleteAttachment(userId, songId, attachmentId);
@@ -437,6 +462,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
     addRichText,
     addImage,
     updateAttachment,
+    updateAssetStorage,
     deleteAttachment,
     deleteAllAttachments,
     reorderAttachments,

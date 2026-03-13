@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User-scoped data: songs, setlists, attachments, assets
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Live Session signaling rooms
+    match /sessions/{roomCode} {
+      // Anyone can read (to join via room code)
+      allow read: if true;
+      // Only authenticated users can create/delete (host must be signed in)
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+
+      // Peer signaling docs (answers + ICE candidates)
+      match /peers/{peerId} {
+        // Anyone can read/write (joining doesn't require auth)
+        allow read, write: if true;
+      }
+    }
+  }
+}

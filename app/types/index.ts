@@ -7,7 +7,6 @@ export interface Song {
   key?: string;
   notes?: string;
   audioMode?: 'metronome' | 'backingtrack' | 'off';
-  countInBars?: number; // 1, 2, or 4
   createdAt: string;
   updatedAt: string;
 }
@@ -37,6 +36,7 @@ export interface Asset {
   mimeType: string | null;
   size: number | null;
   storageUrl: string | null;
+  storagePath: string | null;
   content?: object;
   drawingData?: DrawingData;
   createdAt: string;
@@ -76,9 +76,8 @@ export interface Attachment {
   // richtext
   content?: object; // Tiptap JSON document
 
-  // image / pdf
+  // image / pdf — storageUrl is resolved from the linked Asset at load time (not persisted)
   storageUrl?: string;
-  storagePath?: string;
   fileName?: string;
   fileSize?: number; // bytes
   width?: number;

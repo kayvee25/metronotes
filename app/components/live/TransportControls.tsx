@@ -16,6 +16,7 @@ interface TransportControlsProps {
   onBtSeek: (time: number) => void;
   onBtSetVolume: (vol: number) => void;
   onMetronomeVolumeChange?: (vol: number) => void;
+  readOnly?: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -58,6 +59,28 @@ const BeatButton = memo(function BeatButton({
 
 type SourceOption = { type: 'metronome' } | { type: 'none' } | { type: 'audio'; attachment: Attachment };
 
+/** Read-only beat indicator — shows synced beat without play/stop control */
+const ReadOnlyBeatIndicator = memo(function ReadOnlyBeatIndicator({
+  isPlaying, isBeating, currentBeat,
+}: {
+  isPlaying: boolean; isBeating: boolean; currentBeat: number;
+}) {
+  if (!isPlaying) return null;
+  return (
+    <div
+      className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-75 ${
+        isBeating && currentBeat === 0
+          ? 'bg-red-500 text-white scale-110 shadow-[0_0_14px_rgba(239,68,68,0.5)]'
+          : isBeating
+          ? 'bg-yellow-500 text-white scale-105 shadow-[0_0_12px_rgba(234,179,8,0.5)]'
+          : 'bg-[var(--card)] text-[var(--muted)]'
+      }`}
+    >
+      <span className="text-sm font-bold">{currentBeat + 1}</span>
+    </div>
+  );
+});
+
 export default function TransportControls({
   transport,
   onTogglePlay,
@@ -69,6 +92,7 @@ export default function TransportControls({
   onBtSeek,
   onBtSetVolume,
   onMetronomeVolumeChange,
+  readOnly = false,
 }: TransportControlsProps) {
   const [showSourcePicker, setShowSourcePicker] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
@@ -98,9 +122,140 @@ export default function TransportControls({
 
   if (!transport) return null;
 
+  // Read-only mode
+  if (readOnly) {
+    const roVolume = transport.isMuted ? 0 : (transport.metronomeVolume ?? 1);
+
+    // Backing track mode — show disabled play/pause + seek bar
+    if (transport.audioMode === 'backingtrack') {
+      const roProgress = transport.btDuration > 0 ? (transport.btCurrentTime / transport.btDuration) * 100 : 0;
+      return (
+        <div className="border-b border-[var(--border)]/50">
+          <div className="flex items-center px-4 py-2">
+            {/* Music note icon (no interaction) */}
+            <div className="w-20 flex-shrink-0 flex items-center">
+              <div className="w-9 h-9 flex items-center justify-center text-[var(--accent)]">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Time display */}
+            <span className="flex-1 text-center text-xs font-mono text-[var(--muted)] tabular-nums">
+              {formatTime(transport.btCurrentTime)}
+              <span className="text-[var(--border)]"> / </span>
+              {formatTime(transport.btDuration)}
+            </span>
+
+            {/* Disabled play/pause indicator */}
+            <div className="w-20 flex-shrink-0 flex justify-end">
+              <div
+                className={`w-11 h-11 rounded-full flex items-center justify-center opacity-50 ${
+                  transport.btIsPlaying
+                    ? 'bg-[var(--accent)] text-white shadow-[0_0_10px_rgba(224,159,79,0.3)]'
+                    : 'bg-[var(--card)] text-[var(--muted)]'
+                }`}
+              >
+                {transport.btIsPlaying ? (
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="5" width="4" height="14" rx="1" />
+                    <rect x="14" y="5" width="4" height="14" rx="1" />
+                  </svg>
+                ) : (
+                  <svg className="w-4.5 h-4.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Read-only seek bar */}
+          <div className="px-4 pb-2 h-4 flex items-center">
+            <div className="w-full h-1 bg-[var(--border)] rounded-full overflow-visible relative">
+              <div
+                className="absolute inset-y-0 left-0 bg-[var(--accent)] rounded-full transition-[width] duration-100"
+                style={{ width: `${roProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Off mode — nothing to show
+    if (transport.audioMode === 'off') {
+      return null;
+    }
+
+    // Metronome mode — beat indicator + BPM
+    return (
+      <div className="border-b border-[var(--border)]/50">
+        <div className="flex items-center px-4 py-2">
+          {/* Volume */}
+          <div className="relative w-20 flex-shrink-0" ref={volumeRef}>
+            <button
+              onClick={() => setShowVolume(!showVolume)}
+              className={`w-9 h-9 rounded-lg hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center ${
+                roVolume === 0 ? 'text-red-400' : 'text-[var(--muted)]'
+              }`}
+              aria-label="Volume"
+            >
+              {roVolume === 0 ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+              )}
+            </button>
+            {showVolume && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg z-30 p-2 flex flex-col items-center">
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={roVolume}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (val === 0 && !transport.isMuted) onToggleMute();
+                    else if (val > 0 && transport.isMuted) onToggleMute();
+                    if (val > 0) onMetronomeVolumeChange?.(val);
+                  }}
+                  aria-label="Volume"
+                  className="h-24 accent-[var(--accent)]"
+                  style={{ writingMode: 'vertical-lr', direction: 'rtl' } as React.CSSProperties}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* BPM display — centered, no +/- */}
+          <span className="flex-1 text-center text-sm font-mono font-bold text-[var(--foreground)] tabular-nums">
+            {transport.bpm}
+          </span>
+
+          {/* Beat indicator — read-only, no play/stop */}
+          <div className="w-20 flex-shrink-0 flex justify-end">
+            <ReadOnlyBeatIndicator
+              isPlaying={transport.isPlaying}
+              isBeating={transport.isBeating}
+              currentBeat={transport.currentBeat}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { bpm, isPlaying, currentBeat, isBeating, isMuted,
           audioMode, audioAttachments,
-          btIsPlaying, btIsCountingIn, btCurrentTime, btDuration, btBuffered, btVolume, btActiveTrackId } = transport;
+          btIsPlaying, btCurrentTime, btDuration, btBuffered, btVolume, btActiveTrackId } = transport;
 
   // Volume value
   const metronomeVolume = transport.metronomeVolume ?? 1;
@@ -188,7 +343,7 @@ export default function TransportControls({
       {sources.map((source) => {
         const label = source.type === 'metronome' ? 'Metronome'
           : source.type === 'none' ? 'Off'
-          : source.attachment.name || 'Audio';
+          : source.attachment.name || source.attachment.fileName || source.attachment.cloudFileName || 'Audio';
         const isActive = (source.type === 'metronome' && audioMode === 'metronome')
           || (source.type === 'none' && audioMode === 'off')
           || (source.type === 'audio' && audioMode === 'backingtrack' && source.attachment.id === btActiveTrackId);
@@ -339,13 +494,6 @@ export default function TransportControls({
 
   return (
     <div className="border-b border-[var(--border)]/50">
-      {/* Count-in overlay */}
-      {btIsCountingIn && (
-        <div className="px-4 py-1.5 flex items-center justify-center">
-          <span className="text-sm font-semibold text-[var(--accent)] animate-pulse">Count in...</span>
-        </div>
-      )}
-
       {/* Control row */}
       <div className="flex items-center px-4 py-2">
         {/* Left icons — fixed width for symmetry */}

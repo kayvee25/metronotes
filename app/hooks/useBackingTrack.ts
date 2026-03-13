@@ -5,13 +5,11 @@ import { Attachment } from '../types';
 import { getCachedBlob } from '../lib/offline-cache';
 import { fetchCloudBlob } from '../lib/cloud-providers/fetch-cloud-blob';
 import { isCloudLinked } from '../lib/cloud-providers/types';
-import { scheduleClick, type MetronomeSound } from '../lib/audio-clicks';
-import { AUDIO, ANIMATION } from '../lib/constants';
+import { AUDIO } from '../lib/constants';
 
 interface UseBackingTrackOptions {
   songId: string | null;
   attachments: Attachment[];
-  metronomeSound?: MetronomeSound;
   onError?: (message: string) => void;
 }
 
@@ -19,15 +17,11 @@ interface UseBackingTrackReturn {
   track: Attachment | null;
   audioUrl: string | null;
   isPlaying: boolean;
-  isCountingIn: boolean;
   currentTime: number;
   duration: number;
   buffered: number; // seconds buffered
   volume: number;
-  currentBeat: number;
-  isBeating: boolean;
-  beatsPerMeasure: number;
-  play: (countInBars: number, bpm: number, timeSignature: string) => void;
+  play: () => void;
   pause: () => void;
   stop: () => void;
   seek: (time: number) => void;
@@ -37,35 +31,26 @@ interface UseBackingTrackReturn {
 export function useBackingTrack({
   songId,
   attachments,
-  metronomeSound = 'default',
   onError,
 }: UseBackingTrackOptions): UseBackingTrackReturn {
   const track = attachments.find(a => a.type === 'audio') ?? null;
 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isCountingIn, setIsCountingIn] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [buffered, setBuffered] = useState(0);
   const [volume, setVolumeState] = useState<number>(AUDIO.DEFAULT_VOLUME);
-  const [currentBeat, setCurrentBeat] = useState(0);
-  const [isBeating, setIsBeating] = useState(false);
-  const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
-  const countInTimerRef = useRef<number | null>(null);
-  const countInCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const metronomeSoundRef = useRef(metronomeSound);
   const onErrorRef = useRef(onError);
 
   // Keep refs in sync
   useEffect(() => {
-    metronomeSoundRef.current = metronomeSound;
     onErrorRef.current = onError;
-  }, [metronomeSound, onError]);
+  }, [onError]);
 
   // Create Audio element once
   useEffect(() => {
@@ -156,7 +141,6 @@ export function useBackingTrack({
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
-    setIsCountingIn(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-set source when URL changes, not volume
   }, [audioUrl]);
 
@@ -217,7 +201,7 @@ export function useBackingTrack({
 
   // Time update via requestAnimationFrame (smoother than ontimeupdate)
   useEffect(() => {
-    if (isPlaying && !isCountingIn) {
+    if (isPlaying) {
       const tick = () => {
         const audio = audioRef.current;
         if (audio && !audio.paused) {
@@ -243,7 +227,7 @@ export function useBackingTrack({
         animFrameRef.current = null;
       }
     };
-  }, [isPlaying, isCountingIn]);
+  }, [isPlaying]);
 
   // Clean up on song change
   useEffect(() => {
@@ -254,16 +238,7 @@ export function useBackingTrack({
         audio.currentTime = 0;
       }
       setIsPlaying(false);
-      setIsCountingIn(false);
       setCurrentTime(0);
-      if (countInTimerRef.current) {
-        clearTimeout(countInTimerRef.current);
-        countInTimerRef.current = null;
-      }
-      if (countInCtxRef.current) {
-        countInCtxRef.current.close();
-        countInCtxRef.current = null;
-      }
     };
   }, [songId]);
 
@@ -276,95 +251,21 @@ export function useBackingTrack({
     };
   }, []);
 
-  const play = useCallback((countInBars: number, bpm: number, timeSignature: string) => {
+  const play = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrl) return;
 
-    const beats = parseInt(timeSignature.split('/')[0]) || 4;
-    setBeatsPerMeasure(beats);
-
-    if (countInBars <= 0) {
-      // No count-in, play immediately
-      audio.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.warn('[useBackingTrack] Play failed:', err);
-        onErrorRef.current?.('Could not start playback');
-      });
-      return;
-    }
-
-    // Count-in with Web Audio API clicks
-    setIsCountingIn(true);
-    setIsPlaying(true);
-
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioContextClass();
-    countInCtxRef.current = ctx;
-
-    const totalBeats = countInBars * beats;
-    const secondsPerBeat = 60.0 / bpm;
-
-    // Schedule all count-in clicks
-    for (let i = 0; i < totalBeats; i++) {
-      const time = ctx.currentTime + i * secondsPerBeat;
-      const beatInMeasure = i % beats;
-      scheduleClick(ctx, beatInMeasure, time, metronomeSoundRef.current, false);
-    }
-
-    // Visual beat indicator during count-in
-    let beatIndex = 0;
-    setCurrentBeat(0);
-    setIsBeating(true);
-    setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
-
-    const beatInterval = setInterval(() => {
-      beatIndex++;
-      if (beatIndex >= totalBeats) {
-        clearInterval(beatInterval);
-        return;
-      }
-      setCurrentBeat(beatIndex % beats);
-      setIsBeating(true);
-      setTimeout(() => setIsBeating(false), ANIMATION.BEAT_INDICATOR_MS);
-    }, secondsPerBeat * 1000);
-
-    // Start playback after count-in duration
-    const countInDuration = totalBeats * secondsPerBeat * 1000;
-    countInTimerRef.current = window.setTimeout(() => {
-      clearInterval(beatInterval);
-      setIsCountingIn(false);
-      setCurrentBeat(0);
-      setIsBeating(false);
-      ctx.close();
-      countInCtxRef.current = null;
-
-      audio.currentTime = 0;
-      audio.play().catch(err => {
-        console.warn('[useBackingTrack] Play after count-in failed:', err);
-        setIsPlaying(false);
-        onErrorRef.current?.('Could not start playback after count-in');
-      });
-    }, countInDuration);
+    audio.play().then(() => {
+      setIsPlaying(true);
+    }).catch(err => {
+      console.warn('[useBackingTrack] Play failed:', err);
+      onErrorRef.current?.('Could not start playback');
+    });
   }, [audioUrl]);
 
   const pause = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    // If counting in, cancel everything
-    if (countInTimerRef.current) {
-      clearTimeout(countInTimerRef.current);
-      countInTimerRef.current = null;
-    }
-    if (countInCtxRef.current) {
-      countInCtxRef.current.close();
-      countInCtxRef.current = null;
-    }
-    setIsCountingIn(false);
-
     audio.pause();
     setIsPlaying(false);
   }, []);
@@ -372,18 +273,6 @@ export function useBackingTrack({
   const stop = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    // Cancel count-in if active
-    if (countInTimerRef.current) {
-      clearTimeout(countInTimerRef.current);
-      countInTimerRef.current = null;
-    }
-    if (countInCtxRef.current) {
-      countInCtxRef.current.close();
-      countInCtxRef.current = null;
-    }
-    setIsCountingIn(false);
-
     audio.pause();
     audio.currentTime = 0;
     setCurrentTime(0);
@@ -410,14 +299,10 @@ export function useBackingTrack({
     track,
     audioUrl,
     isPlaying,
-    isCountingIn,
     currentTime,
     duration,
     buffered,
     volume,
-    currentBeat,
-    isBeating,
-    beatsPerMeasure,
     play,
     pause,
     stop,

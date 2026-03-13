@@ -25,7 +25,61 @@ import {
   DEFAULT_SESSION_SETTINGS,
   DEFAULT_METRONOME_STATE as DEFAULT_METRO,
 } from '../lib/live-session/protocol';
+import { ref, getBytes } from 'firebase/storage';
+import { firebaseStorage } from '../lib/firebase';
 import type { Song, Attachment, Asset } from '../types';
+
+/** Serializable snapshot saved to sessionStorage for host restore on reload */
+interface HostSessionSnapshot {
+  roomCode: string;
+  queue: QueueItem[];
+  currentIndex: number | null;
+  settings: SessionSettings;
+  metronome: LiveSession['metronome'];
+  storagePaths: Record<string, string>; // assetId → storagePath
+  savedAt: number; // Date.now() timestamp
+}
+
+const HOST_SESSION_KEY = 'metronotes_host_session';
+const SNAPSHOT_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+function saveHostSnapshot(session: LiveSession, storagePaths: Map<string, string>) {
+  if (typeof window === 'undefined') return;
+  const snapshot: HostSessionSnapshot = {
+    roomCode: session.roomCode,
+    queue: session.queue,
+    currentIndex: session.currentIndex,
+    settings: session.settings,
+    metronome: session.metronome,
+    storagePaths: Object.fromEntries(storagePaths),
+    savedAt: Date.now(),
+  };
+  try {
+    sessionStorage.setItem(HOST_SESSION_KEY, JSON.stringify(snapshot));
+  } catch { /* quota exceeded — non-critical */ }
+}
+
+function loadHostSnapshot(): HostSessionSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(HOST_SESSION_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw) as HostSessionSnapshot;
+    // Check TTL — discard stale snapshots
+    if (snapshot.savedAt && Date.now() - snapshot.savedAt > SNAPSHOT_TTL_MS) {
+      sessionStorage.removeItem(HOST_SESSION_KEY);
+      return null;
+    }
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function clearHostSnapshot() {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(HOST_SESSION_KEY);
+}
 
 export interface UseHostSessionReturn {
   session: LiveSession | null;
@@ -47,12 +101,23 @@ export interface UseHostSessionReturn {
   broadcastBeat: (beatNumber: number) => void;
   updateMetronomeState: (state: LiveSession['metronome']) => void;
   // Live edit propagation (Phase 4)
-  broadcastSongUpdate: (song: Song, attachments: Attachment[]) => void;
+  broadcastSongUpdate: (song: Song, attachments: Attachment[], newAssetsMap?: Map<string, Asset>) => void;
+  // Cloud blob cache for GDrive etc.
+  registerCloudBlob: (assetId: string, data: ArrayBuffer) => void;
+  // Session persistence (Phase 5)
+  pendingRestore: { roomCode: string; sessionName: string } | null;
+  restoreSession: () => Promise<string>;
+  clearPendingRestore: () => void;
 }
 
 export function useHostSession(): UseHostSessionReturn {
   const [session, setSession] = useState<LiveSession | null>(null);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
+  const [pendingRestore, setPendingRestore] = useState<{ roomCode: string; sessionName: string } | null>(() => {
+    const snapshot = loadHostSnapshot();
+    if (!snapshot) return null;
+    return { roomCode: snapshot.roomCode, sessionName: snapshot.settings.sessionName };
+  });
 
   const managerRef = useRef<HostConnectionManager | null>(null);
   const senderRef = useRef<AssetTransferSender | null>(null);
@@ -65,10 +130,22 @@ export function useHostSession(): UseHostSessionReturn {
   const sessionRef = useRef<LiveSession | null>(null);
   useEffect(() => {
     sessionRef.current = session;
+    // Persist to sessionStorage for restore on reload
+    if (session) {
+      saveHostSnapshot(session, storagePathsRef.current);
+    }
   }, [session]);
 
   // Store assets map ref for binary transfer when peers request assets
   const assetsMapRef = useRef<Map<string, Asset>>(new Map());
+  // Map assetId → storagePath for Firebase Storage SDK downloads
+  const storagePathsRef = useRef<Map<string, string>>(new Map());
+  // Cache for cloud-downloaded blobs (GDrive etc.) — assetId → ArrayBuffer
+  const blobCacheRef = useRef<Map<string, ArrayBuffer>>(new Map());
+
+  const registerCloudBlob = useCallback((assetId: string, data: ArrayBuffer) => {
+    blobCacheRef.current.set(assetId, data);
+  }, []);
 
   const updatePeerInfo = useCallback(
     (peerId: string, update: Partial<PeerInfo>) => {
@@ -96,6 +173,28 @@ export function useHostSession(): UseHostSessionReturn {
     setPeers((prev) => prev.filter((p) => p.peerId !== peerId));
   }, []);
 
+  // Enrich queue items with asset manifests from assetsMapRef
+  const enrichQueueWithManifests = useCallback((queue: QueueItem[]): QueueItem[] => {
+    return queue.map((item) => {
+      const manifests: AssetManifest[] = [];
+      for (const att of item.attachments) {
+        if (att.assetId) {
+          const asset = assetsMapRef.current.get(att.assetId);
+          if (asset) {
+            manifests.push({
+              id: asset.id,
+              name: asset.name,
+              type: asset.type,
+              size: asset.size ?? 0,
+              checksum: '',
+            });
+          }
+        }
+      }
+      return manifests.length > 0 ? { ...item, assets: manifests } : item;
+    });
+  }, []);
+
   // Send current session state to a specific peer (used on join and reconnect)
   const sendSessionState = useCallback((peerId: string) => {
     const manager = managerRef.current;
@@ -104,92 +203,78 @@ export function useHostSession(): UseHostSessionReturn {
 
     const msg: HostMessage = {
       type: 'session-state',
-      queue: s.queue,
+      queue: enrichQueueWithManifests(s.queue),
       currentIndex: s.currentIndex,
       metronome: s.metronome,
       settings: s.settings,
     };
     manager.sendToPeer(peerId, JSON.stringify(msg));
-  }, []);
+  }, [enrichQueueWithManifests]);
 
   // Fetch binary data for an asset and send it to a peer
   const sendAssetToPeer = useCallback(
     async (peerId: string, songId: string, asset: Asset) => {
       const sender = senderRef.current;
-      if (!sender) return;
+      if (!sender) {
+        console.warn(`[host] sendAssetToPeer: no sender`);
+        return;
+      }
 
       try {
-        let data: ArrayBuffer;
+        let data: ArrayBuffer | undefined;
 
-        if (asset.storageUrl) {
-          // Binary asset — fetch from storage URL
-          const response = await fetch(asset.storageUrl);
-          data = await response.arrayBuffer();
-        } else if (asset.content || asset.drawingData) {
-          // Inline content — serialize to JSON
+        // Inline assets (richtext, drawing) — serialize from memory
+        if (asset.content || asset.drawingData) {
           const json = JSON.stringify(asset.content || asset.drawingData);
           data = new TextEncoder().encode(json).buffer as ArrayBuffer;
-        } else {
-          return; // No data to transfer
-        }
-
-        await sender.sendAsset(peerId, songId, asset.id, data);
-      } catch {
-        // Transfer failed — peer can re-request
-      }
-    },
-    []
-  );
-
-  // Send asset manifests for songs in the prefetch window to a specific peer
-  const sendAssetManifests = useCallback(
-    (peerId: string, queue: QueueItem[], currentIndex: number | null, prefetchWindow: number) => {
-      const manager = managerRef.current;
-      if (!manager) return;
-
-      const startIdx = currentIndex ?? 0;
-      const endIdx = Math.min(startIdx + prefetchWindow, queue.length);
-
-      for (let i = startIdx; i < endIdx; i++) {
-        const item = queue[i];
-        const manifests: AssetManifest[] = [];
-
-        for (const att of item.attachments) {
-          if (att.assetId) {
-            const asset = assetsMapRef.current.get(att.assetId);
-            if (asset) {
-              manifests.push({
-                id: asset.id,
-                name: asset.name,
-                type: asset.type,
-                size: asset.size ?? 0,
-                checksum: '', // computed at transfer time
-              });
+        } else if (['richtext', 'drawing'].includes(asset.type)) {
+          // Fallback: inline asset without content on the Asset object — check queue attachments
+          const session = sessionRef.current;
+          if (session) {
+            const queueItem = session.queue.find(q => q.songId === songId);
+            const att = queueItem?.attachments.find(a => a.assetId === asset.id);
+            if (att?.content || att?.drawingData) {
+              const json = JSON.stringify(att.content || att.drawingData);
+              data = new TextEncoder().encode(json).buffer as ArrayBuffer;
             }
+          }
+          if (!data) {
+            console.warn(`[host] Inline asset ${asset.id} (${asset.type}) has no content`);
+            return;
+          }
+        } else {
+          // Check cloud blob cache first (GDrive downloads)
+          const cached = blobCacheRef.current.get(asset.id);
+          if (cached) {
+            data = cached;
+          } else {
+            // Binary assets (image, pdf, audio) — download via Firebase SDK
+            const storagePath = storagePathsRef.current.get(asset.id);
+            if (!storagePath) {
+              console.warn(`[host] Asset ${asset.id} has no storagePath, type=${asset.type}`);
+              return;
+            }
+            const storageRef = ref(firebaseStorage, storagePath);
+            data = await getBytes(storageRef);
           }
         }
 
-        if (manifests.length > 0) {
-          const msg: HostMessage = {
-            type: 'asset-manifest',
-            songId: item.songId,
-            assets: manifests,
-          };
-          manager.sendToPeer(peerId, JSON.stringify(msg));
-        }
+        await sender.sendAsset(peerId, songId, asset.id, data);
+      } catch (err) {
+        console.error(`[host] sendAssetToPeer failed:`, err);
       }
     },
     []
   );
 
   const startSession = useCallback(
-    async (settings?: Partial<SessionSettings>): Promise<string> => {
+    async (settings?: Partial<SessionSettings>, existingRoomCode?: string): Promise<string> => {
       if (managerRef.current) {
         throw new Error('Session already active');
       }
 
       destroyedRef.current = false;
-      const code = generateRoomCode();
+      const code = existingRoomCode || generateRoomCode();
       roomCodeRef.current = code;
 
       const mergedSettings: SessionSettings = {
@@ -200,11 +285,12 @@ export function useHostSession(): UseHostSessionReturn {
       const manager = new HostConnectionManager();
       managerRef.current = manager;
 
-      // Set up asset transfer sender
+      // Set up asset transfer sender with backpressure
       const sender = new AssetTransferSender(
         (peerId, header, payload) => {
           manager.sendBinaryToPeer(peerId, header, payload);
-        }
+        },
+        (peerId) => manager.getBinaryBufferedAmount(peerId),
       );
       senderRef.current = sender;
 
@@ -218,24 +304,17 @@ export function useHostSession(): UseHostSessionReturn {
               displayName: parsed.displayName,
               status: 'connected',
             });
-            // Send current session state to newly joined peer
+            // Send current session state (includes asset manifests in queue items)
             sendSessionState(peerId);
-            // Send asset manifests for prefetch window
-            const s = sessionRef.current;
-            if (s && s.queue.length > 0) {
-              sendAssetManifests(peerId, s.queue, s.currentIndex, s.settings.prefetchWindow);
-            }
           }
 
           if (parsed.type === 'asset-request') {
             const asset = assetsMapRef.current.get(parsed.assetId);
             if (asset) {
               sendAssetToPeer(peerId, parsed.songId, asset);
+            } else {
+              console.warn(`[host] asset-request for unknown asset ${parsed.assetId} (song ${parsed.songId})`);
             }
-          }
-
-          if (parsed.type === 'asset-received') {
-            // Could track download progress here
           }
 
           if (parsed.type === 'clock-sync-request') {
@@ -345,7 +424,7 @@ export function useHostSession(): UseHostSessionReturn {
 
       return code;
     },
-    [updatePeerInfo, removePeer, sendSessionState, sendAssetManifests, sendAssetToPeer]
+    [updatePeerInfo, removePeer, sendSessionState, sendAssetToPeer]
   );
 
   // --- Queue Operations ---
@@ -356,9 +435,27 @@ export function useHostSession(): UseHostSessionReturn {
       attachmentsMap: Map<string, Attachment[]>,
       newAssetsMap: Map<string, Asset>
     ) => {
-      // Update assets ref with any new assets
+      // Update assets ref — for inline types (richtext/drawing), ensure content is populated
+      // from the attachment data if not already on the Asset object
       for (const [id, asset] of newAssetsMap) {
-        assetsMapRef.current.set(id, asset);
+        let enriched = asset;
+        if ((asset.type === 'richtext' && !asset.content) || (asset.type === 'drawing' && !asset.drawingData)) {
+          for (const [, atts] of attachmentsMap) {
+            const att = atts.find(a => a.assetId === id);
+            if (att) {
+              if (asset.type === 'richtext' && att.content) {
+                enriched = { ...asset, content: att.content };
+              } else if (asset.type === 'drawing' && att.drawingData) {
+                enriched = { ...asset, drawingData: att.drawingData };
+              }
+              break;
+            }
+          }
+        }
+        assetsMapRef.current.set(id, enriched);
+        if (enriched.storagePath) {
+          storagePathsRef.current.set(id, enriched.storagePath);
+        }
       }
 
       setSession((prev) => {
@@ -380,33 +477,20 @@ export function useHostSession(): UseHostSessionReturn {
           currentIndex: prev.currentIndex ?? (updatedQueue.length > 0 ? 0 : null),
         };
 
-        // Send queue update to all peers
+        // Send queue update to all peers (with manifests embedded)
         const manager = managerRef.current;
         if (manager) {
           const msg: HostMessage = {
             type: 'queue-update',
-            queue: updatedQueue,
+            queue: enrichQueueWithManifests(updatedQueue),
           };
           manager.sendToAll(JSON.stringify(msg));
-
-          // Send asset manifests for new songs to all connected peers
-          const peerIds = manager.getPeerIds();
-          for (const peerId of peerIds) {
-            if (manager.getPeerStatus(peerId) === 'connected') {
-              sendAssetManifests(
-                peerId,
-                updatedQueue,
-                updatedSession.currentIndex,
-                prev.settings.prefetchWindow
-              );
-            }
-          }
         }
 
         return updatedSession;
       });
     },
-    [sendAssetManifests]
+    [enrichQueueWithManifests]
   );
 
   const removeSongFromQueue = useCallback((queueIndex: number) => {
@@ -473,6 +557,10 @@ export function useHostSession(): UseHostSessionReturn {
       if (manager) {
         const msg: HostMessage = { type: 'queue-update', queue: reindexed };
         manager.sendToAll(JSON.stringify(msg));
+        if (newCurrentIndex !== prev.currentIndex) {
+          const navMsg: HostMessage = { type: 'song-change', index: newCurrentIndex ?? 0 };
+          manager.sendToAll(JSON.stringify(navMsg));
+        }
       }
 
       return { ...prev, queue: reindexed, currentIndex: newCurrentIndex };
@@ -484,29 +572,15 @@ export function useHostSession(): UseHostSessionReturn {
       if (!prev) return prev;
       if (queueIndex < 0 || queueIndex >= prev.queue.length) return prev;
 
-      // Send song-change immediately (never debounced)
       const manager = managerRef.current;
       if (manager) {
         const msg: HostMessage = { type: 'song-change', index: queueIndex };
         manager.sendToAll(JSON.stringify(msg));
-
-        // Send asset manifests for the new prefetch window
-        const peerIds = manager.getPeerIds();
-        for (const peerId of peerIds) {
-          if (manager.getPeerStatus(peerId) === 'connected') {
-            sendAssetManifests(
-              peerId,
-              prev.queue,
-              queueIndex,
-              prev.settings.prefetchWindow
-            );
-          }
-        }
       }
 
       return { ...prev, currentIndex: queueIndex };
     });
-  }, [sendAssetManifests]);
+  }, []);
 
   const currentSong = session?.currentIndex !== null && session?.currentIndex !== undefined
     ? session.queue[session.currentIndex] ?? null
@@ -537,9 +611,30 @@ export function useHostSession(): UseHostSessionReturn {
     manager.sendToAll(JSON.stringify(msg));
   }, []);
 
-  const broadcastSongUpdate = useCallback((song: Song, attachments: Attachment[]) => {
+  const broadcastSongUpdate = useCallback((song: Song, attachments: Attachment[], newAssetsMap?: Map<string, Asset>) => {
     const manager = managerRef.current;
     if (!manager) return;
+
+    // Update assets ref — enrich inline types with content from attachments if needed
+    if (newAssetsMap) {
+      for (const [id, asset] of newAssetsMap) {
+        let enriched = asset;
+        if ((asset.type === 'richtext' && !asset.content) || (asset.type === 'drawing' && !asset.drawingData)) {
+          const att = attachments.find(a => a.assetId === id);
+          if (att) {
+            if (asset.type === 'richtext' && att.content) {
+              enriched = { ...asset, content: att.content };
+            } else if (asset.type === 'drawing' && att.drawingData) {
+              enriched = { ...asset, drawingData: att.drawingData };
+            }
+          }
+        }
+        assetsMapRef.current.set(id, enriched);
+        if (enriched.storagePath) {
+          storagePathsRef.current.set(id, enriched.storagePath);
+        }
+      }
+    }
 
     // Update the song in the queue locally
     setSession((prev) => {
@@ -553,8 +648,19 @@ export function useHostSession(): UseHostSessionReturn {
       return { ...prev, queue: updatedQueue };
     });
 
-    // Broadcast to all members
-    const msg: HostMessage = { type: 'song-update', song, attachments };
+    // Build manifests for all assets
+    const manifests: AssetManifest[] = [];
+    for (const att of attachments) {
+      if (att.assetId) {
+        const asset = assetsMapRef.current.get(att.assetId);
+        if (asset) {
+          manifests.push({ id: asset.id, name: asset.name, type: asset.type, size: asset.size ?? 0, checksum: '' });
+        }
+      }
+    }
+
+    // Broadcast song data + manifests to all members
+    const msg: HostMessage = { type: 'song-update', song, attachments, assets: manifests.length > 0 ? manifests : undefined };
     manager.sendToAll(JSON.stringify(msg));
   }, []);
 
@@ -589,8 +695,74 @@ export function useHostSession(): UseHostSessionReturn {
 
     peerStageRef.current.clear();
     assetsMapRef.current.clear();
+    storagePathsRef.current.clear();
+    blobCacheRef.current.clear();
+    clearHostSnapshot();
     setSession(null);
     setPeers([]);
+  }, []);
+
+  // Restore a session from sessionStorage snapshot
+  const restoreSession = useCallback(async (): Promise<string> => {
+    const snapshot = loadHostSnapshot();
+    if (!snapshot) throw new Error('No session to restore');
+
+    setPendingRestore(null);
+
+    // Clean up old Firestore room before recreating (it may have stale peer docs)
+    await deleteSignalingRoom(snapshot.roomCode).catch(() => {});
+
+    // Rebuild assetsMapRef from queue attachments (content/drawingData are on attachments)
+    for (const item of snapshot.queue) {
+      for (const att of item.attachments) {
+        if (att.assetId) {
+          assetsMapRef.current.set(att.assetId, {
+            id: att.assetId,
+            name: att.name || `${att.type} asset`,
+            type: att.type as Asset['type'],
+            mimeType: null,
+            size: null,
+            storageUrl: null,
+            storagePath: snapshot.storagePaths[att.assetId] ?? null,
+            content: att.content,
+            drawingData: att.drawingData,
+            createdAt: '',
+            updatedAt: '',
+          });
+        }
+      }
+    }
+
+    // Rebuild storagePathsRef from snapshot
+    for (const [assetId, path] of Object.entries(snapshot.storagePaths)) {
+      storagePathsRef.current.set(assetId, path);
+    }
+
+    // Reuse the SAME room code so members can rejoin
+    const code = await startSession(snapshot.settings, snapshot.roomCode);
+
+    // Seed with snapshot queue/index/metronome
+    setSession((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        queue: snapshot.queue,
+        currentIndex: snapshot.currentIndex,
+        metronome: snapshot.metronome,
+      };
+    });
+
+    return code;
+  }, [startSession]);
+
+  const clearPendingRestore = useCallback(() => {
+    // Clean up stale Firestore room when user dismisses restore
+    const snapshot = loadHostSnapshot();
+    if (snapshot?.roomCode) {
+      deleteSignalingRoom(snapshot.roomCode).catch(() => {});
+    }
+    clearHostSnapshot();
+    setPendingRestore(null);
   }, []);
 
   // Cleanup on unmount
@@ -629,5 +801,9 @@ export function useHostSession(): UseHostSessionReturn {
     broadcastBeat,
     updateMetronomeState,
     broadcastSongUpdate,
+    registerCloudBlob,
+    pendingRestore,
+    restoreSession,
+    clearPendingRestore,
   };
 }

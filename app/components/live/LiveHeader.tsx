@@ -13,8 +13,8 @@ interface LiveHeaderProps {
   artist?: string;
   queue: QueueSong[];
   currentIndex: number;
-  onSelectFromQueue: (index: number) => void;
-  onBack: () => void;
+  onSelectFromQueue?: (index: number) => void;
+  onBack?: () => void;
   transportSlot?: ReactNode;
   isEditMode?: boolean;
   onToggleEditMode?: () => void;
@@ -66,15 +66,19 @@ export default function LiveHeader({
     <div className="border-b border-[var(--border)] bg-[var(--background)]">
       {/* Top bar */}
       <div className="flex items-center gap-1 px-3 py-2">
-        <button
-          onClick={onBack}
-          className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
-          aria-label="Back to Library"
-        >
-          <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
+            aria-label="Back"
+          >
+            <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        ) : (
+          <span className="w-11 flex-shrink-0" />
+        )}
 
         {/* Song name — editable in edit mode, queue dropdown in performance mode */}
         <div ref={queueRef} className="flex-1 min-w-0 relative">
@@ -140,17 +144,19 @@ export default function LiveHeader({
 
                 {/* Queue items */}
                 <div className="max-h-64 overflow-y-auto">
-                  {queue.map((song, index) => (
-                    <button
+                  {queue.map((song, index) => {
+                    const El = onSelectFromQueue ? 'button' : 'div';
+                    return (
+                    <El
                       key={`${song.id}-${index}`}
-                      onClick={() => {
+                      onClick={onSelectFromQueue ? () => {
                         onSelectFromQueue(index);
                         setShowQueue(false);
-                      }}
+                      } : undefined}
                       className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                         index === currentIndex
                           ? 'bg-[var(--accent)]/10'
-                          : 'hover:bg-[var(--border)]/50'
+                          : onSelectFromQueue ? 'hover:bg-[var(--border)]/50' : ''
                       }`}
                     >
                       <span className={`text-sm font-mono w-6 text-right flex-shrink-0 ${
@@ -173,8 +179,9 @@ export default function LiveHeader({
                           <path d="M8 5v14l11-7z" />
                         </svg>
                       )}
-                    </button>
-                  ))}
+                    </El>
+                    );
+                  })}
                 </div>
               </div>
             </div>

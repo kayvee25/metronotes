@@ -26,10 +26,10 @@ The current live session flow has too much friction for both hosts and members. 
 
 ### Nice to Have
 
-11. **Host session restore on reload** — Store session state (queue, room code, settings) in sessionStorage. On reload, show warning banner "Session interrupted — restoring..." and re-create the host connection manager. Re-listen for peers (existing members reconnect via auto-rejoin).
-12. **Member rejoin prompt on reload** — Store room code + display name in sessionStorage. On reload, show "Rejoin session ABC 123?" prompt. Member chooses to rejoin or dismiss.
-13. **Asset cleanup on queue removal** — When host removes a song from the queue, delete that song's assets from member IndexedDB immediately (don't wait for session end).
-14. **Dashboard settings gear** — Gear icon on dashboard that opens session settings (metronome enabled, wait-for-sync, allow-late-join, prefetch window). Changes apply immediately and broadcast to members.
+1. **Host session restore on reload** — Store session state (queue, room code, settings) in sessionStorage. On reload, show warning banner "Session interrupted — restoring..." and re-create the host connection manager. Re-listen for peers (existing members reconnect via auto-rejoin).
+2. **Member rejoin prompt on reload** — Store room code + display name in sessionStorage. On reload, show "Rejoin session ABC 123?" prompt. Member chooses to rejoin or dismiss.
+3. **Asset cleanup on queue removal** — When host removes a song from the queue, delete that song's assets from member IndexedDB immediately (don't wait for session end).
+4. **Dashboard settings gear** — Gear icon on dashboard that opens session settings (metronome enabled, wait-for-sync, allow-late-join, prefetch window). Changes apply immediately and broadcast to members.
 
 ### Out of Scope
 
@@ -80,6 +80,7 @@ The current live session flow has too much friction for both hosts and members. 
 ### Session Persistence (Nice to Have)
 
 **Host restore:**
+
 - On session start: save `{ roomCode, queue, currentIndex, settings, metronome }` to `sessionStorage`
 - Update sessionStorage on every queue/index/settings change
 - On app load: check for stored session → show "Session interrupted — Restore session?" prompt
@@ -87,6 +88,7 @@ The current live session flow has too much friction for both hosts and members. 
 - If no: clean up signaling room, clear sessionStorage
 
 **Member rejoin:**
+
 - On join: save `{ roomCode, displayName }` to `sessionStorage`
 - On app load: check for stored session → show "Rejoin session ABC 123?" prompt
 - If yes: call `join(roomCode, displayName)`
@@ -95,6 +97,7 @@ The current live session flow has too much friction for both hosts and members. 
 ### Reconnection
 
 **Member auto-reconnect (WebRTC ICE restart):**
+
 - `PeerConnectionManager.onStatusChange('disconnected')` triggers reconnect timer
 - Show "Connection lost" banner in MemberView/MemberPerformanceView
 - Attempt ICE restart or full re-signaling every 3s, up to 5 attempts (~15s)
@@ -133,14 +136,16 @@ The current live session flow has too much friction for both hosts and members. 
 
 ### Edge Cases & Error States
 
-| Scenario | UX |
-|----------|-----|
-| Member joins before host adds songs | Queue shows "Waiting for host to add songs..." |
-| Asset transfer fails for a song | Member stays on loading spinner. Could add timeout: "Having trouble loading — ask host to re-add the song" |
-| Host removes current song from queue | Navigate to next song (or previous if last). If queue empty, return to dashboard. |
-| Member's phone locks (screen off) | WebRTC may disconnect. On unlock: auto-reconnect banner flow. |
-| Host in performance view, member joins | Silent join. Member receives full session state, starts downloading assets. |
-| All members disconnect | Host sees all members as "disconnected". Session continues. Members can rejoin. |
+
+| Scenario                               | UX                                                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Member joins before host adds songs    | Queue shows "Waiting for host to add songs..."                                                             |
+| Asset transfer fails for a song        | Member stays on loading spinner. Could add timeout: "Having trouble loading — ask host to re-add the song" |
+| Host removes current song from queue   | Navigate to next song (or previous if last). If queue empty, return to dashboard.                          |
+| Member's phone locks (screen off)      | WebRTC may disconnect. On unlock: auto-reconnect banner flow.                                              |
+| Host in performance view, member joins | Silent join. Member receives full session state, starts downloading assets.                                |
+| All members disconnect                 | Host sees all members as "disconnected". Session continues. Members can rejoin.                            |
+
 
 ## Platform Considerations
 
@@ -152,18 +157,21 @@ The current live session flow has too much friction for both hosts and members. 
 
 ## Tradeoffs & Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| Code-only join (no QR/link) | Band members are in the same room. Code is fast enough. Avoids URL routing complexity. |
-| Auto-follow always (no manual follow) | Keeps everyone in sync. Risk of member falling behind outweighs benefit of independent browsing. |
-| Block until assets ready | Simpler than progressive rendering. Songs are small (few attachments). Loading time is brief on LAN WebRTC. |
-| No join notifications for host | Distracting during performance. Host sees member count when returning to dashboard. |
-| Full edit available during session | Quick corrections mid-rehearsal are valuable. Changes broadcast automatically. |
-| sessionStorage not localStorage | Session state is transient. Closing the tab should forget it. localStorage would leave stale sessions across tabs. |
-| Immediate asset cleanup on queue removal | Frees member storage proactively. Small IDB overhead vs. accumulating unused blobs. |
+
+| Decision                                 | Rationale                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Code-only join (no QR/link)              | Band members are in the same room. Code is fast enough. Avoids URL routing complexity.                             |
+| Auto-follow always (no manual follow)    | Keeps everyone in sync. Risk of member falling behind outweighs benefit of independent browsing.                   |
+| Block until assets ready                 | Simpler than progressive rendering. Songs are small (few attachments). Loading time is brief on LAN WebRTC.        |
+| No join notifications for host           | Distracting during performance. Host sees member count when returning to dashboard.                                |
+| Full edit available during session       | Quick corrections mid-rehearsal are valuable. Changes broadcast automatically.                                     |
+| sessionStorage not localStorage          | Session state is transient. Closing the tab should forget it. localStorage would leave stale sessions across tabs. |
+| Immediate asset cleanup on queue removal | Frees member storage proactively. Small IDB overhead vs. accumulating unused blobs.                                |
+
 
 ## Open Questions
 
 1. **Timeout for asset loading** — How long should the member wait before showing "Having trouble loading"? 30s? 60s?
 2. **Max session size** — Should we limit the queue length or total asset size per session? (Current: no limit)
 3. **Multiple sessions** — Can a user be in multiple sessions simultaneously (e.g., hosting one, joined to another)? Currently not supported.
+

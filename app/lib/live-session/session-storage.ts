@@ -119,6 +119,27 @@ export async function getSessionAssetUrl(
 }
 
 /**
+ * Get all stored asset keys (format: "songId:assetId").
+ * Used on rejoin to pre-populate receivedAssetsRef and skip re-downloads.
+ */
+export async function getAllSessionAssetKeys(): Promise<string[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.getAllKeys();
+    request.onsuccess = () => {
+      db.close();
+      resolve((request.result as string[]) ?? []);
+    };
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
+  });
+}
+
+/**
  * Clear all session data and revoke blob URLs.
  */
 export async function clearSessionStorage(): Promise<void> {
@@ -134,6 +155,45 @@ export async function clearSessionStorage(): Promise<void> {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     store.clear();
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+/**
+ * Delete all session assets for a specific song and revoke their blob URLs.
+ */
+export async function deleteSessionAssetsForSong(songId: string): Promise<void> {
+  // Revoke blob URLs for this song
+  const prefix = `${songId}:`;
+  for (const [key, url] of activeBlobUrls) {
+    if (key.startsWith(prefix)) {
+      URL.revokeObjectURL(url);
+      activeBlobUrls.delete(key);
+    }
+  }
+
+  // Delete from IndexedDB
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      }
+    };
     tx.oncomplete = () => {
       db.close();
       resolve();

@@ -7,11 +7,14 @@
 
 import type { TransferHeader } from './protocol';
 
-// 16KB chunk size — small enough for reliable delivery over unordered data channel
-const CHUNK_SIZE = 16 * 1024;
+// 64KB chunk size — fits within WebRTC SCTP limits, 4x fewer chunks than 16KB
+const CHUNK_SIZE = 64 * 1024;
 
 // Max concurrent transfers per peer
 const MAX_CONCURRENT = 2;
+
+// Buffer threshold for backpressure (256KB)
+const BUFFER_HIGH_WATER = 256 * 1024;
 
 // --- Checksum ---
 
@@ -36,14 +39,17 @@ interface PendingTransfer {
 
 export class AssetTransferSender {
   private sendBinary: (peerId: string, header: object, payload: ArrayBuffer) => void;
+  private getBufferedAmount: (peerId: string) => number;
   private activeTransfers = new Map<string, number>(); // peerId → count
   private queue: PendingTransfer[] = [];
   private cancelled = new Set<string>(); // "peerId:assetId"
 
   constructor(
-    sendBinary: (peerId: string, header: object, payload: ArrayBuffer) => void
+    sendBinary: (peerId: string, header: object, payload: ArrayBuffer) => void,
+    getBufferedAmount?: (peerId: string) => number,
   ) {
     this.sendBinary = sendBinary;
+    this.getBufferedAmount = getBufferedAmount ?? (() => 0);
   }
 
   async sendAsset(
@@ -102,6 +108,15 @@ export class AssetTransferSender {
         if (this.cancelled.has(key)) {
           this.cancelled.delete(key);
           return;
+        }
+
+        // Backpressure: wait if the data channel buffer is full
+        while (this.getBufferedAmount(peerId) > BUFFER_HIGH_WATER) {
+          await new Promise((r) => setTimeout(r, 10));
+          if (this.cancelled.has(key)) {
+            this.cancelled.delete(key);
+            return;
+          }
         }
 
         const offset = i * CHUNK_SIZE;

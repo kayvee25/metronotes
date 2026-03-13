@@ -42,7 +42,7 @@
 - Guest-to-authenticated data migration
 
 ### Backing Tracks
-- MP3 backing tracks with integrated playback and count-in
+- MP3 backing tracks with integrated playback
 - Per-song audio mode (metronome / backing track / off)
 - Transport controls (seek bar, volume) in edit and performance mode
 - PlayFAB unified audio control surface
@@ -115,7 +115,7 @@ Specified but not yet implemented. Tracked here to prevent silent accumulation.
 - Asset search/filter in Files tab
 - Link existing assets to songs from Files tab ("Add to song...")
 - Volume control in transport bar (currently in FAB — needs a new home)
-- Count-in bars config (currently in FAB — move to edit panel or transport settings)
+- Count-in for backing tracks (bars-based count-in with metronome clicks before audio playback — removed in R1 to simplify, revisit if users request)
 - Lazy-load asset linkage in `useAssetLinkage` — currently fetches all attachments for all songs on mount, causing a burst of Firestore reads even if user never visits Files tab. Paginate or defer until Files tab is opened.
 
 ### From Release 1: Live Session

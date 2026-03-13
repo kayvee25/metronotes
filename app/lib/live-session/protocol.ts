@@ -7,6 +7,7 @@ export interface QueueItem {
   songId: string;
   song: Song;
   attachments: Attachment[];
+  assets?: AssetManifest[]; // asset manifests for binary transfer
 }
 
 // --- Metronome State ---
@@ -51,11 +52,10 @@ export type HostMessage =
     }
   | { type: 'song-change'; index: number }
   | { type: 'queue-update'; queue: QueueItem[] }
-  | { type: 'song-update'; song: Song; attachments: Attachment[] }
+  | { type: 'song-update'; song: Song; attachments: Attachment[]; assets?: AssetManifest[] }
   | { type: 'metronome-update'; metronome: MetronomeState }
   | { type: 'beat'; networkTime: number; beatNumber: number }
   | { type: 'clock-sync-response'; t1: number; t2: number; t3: number }
-  | { type: 'asset-manifest'; songId: string; assets: AssetManifest[] }
   | { type: 'session-end' };
 
 // --- Member → Host Messages ---

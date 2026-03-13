@@ -294,6 +294,7 @@ export async function firestoreCreateAsset(userId: string, input: AssetInput): P
     mimeType: input.mimeType ?? null,
     size: input.size ?? null,
     storageUrl: input.storageUrl ?? null,
+    storagePath: input.storagePath ?? null,
     content: input.content ?? null,
     drawingData: input.drawingData ?? null,
     createdAt: now,

@@ -11,6 +11,7 @@ import {
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
   GoogleAuthProvider,
+  updateProfile,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { STORAGE_KEYS } from '../lib/constants';
@@ -24,7 +25,7 @@ interface AuthContextValue {
   authState: AuthState;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -104,10 +105,13 @@ export function useAuthProvider(): AuthContextValue {
     }
   }, []);
 
-  const signUpWithEmail = useCallback(async (email: string, password: string) => {
+  const signUpWithEmail = useCallback(async (email: string, password: string, displayName?: string) => {
     setAuthError(null);
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
+      if (displayName?.trim()) {
+        await updateProfile(result.user, { displayName: displayName.trim() });
+      }
       await sendEmailVerification(result.user);
       localStorage.removeItem(STORAGE_KEYS.GUEST_MODE);
     } catch (error: unknown) {

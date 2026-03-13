@@ -10,7 +10,7 @@ A mobile-first PWA for musicians to manage songs, setlists, and a metronome — 
 - **Song Library** — Create and manage songs with BPM, time signature, key, and rich notes
 - **Setlists** — Build ordered setlists from your song library with drag-and-drop reordering
 - **Metronome** — Precise Web Audio API metronome with visual beat indicator, accent on beat 1, and volume control
-- **Backing Tracks** — Upload or link audio files as backing tracks with playback controls, seek bar, buffer indicator, and count-in sync with metronome
+- **Backing Tracks** — Upload or link audio files as backing tracks with playback controls, seek bar, and buffer indicator
 - **Performance Mode** — Full-screen teleprompter view with paged note navigation, floating audio controls (metronome or backing track), and prev/next song navigation within setlists
 - **Edit Mode** — Compact controls grid for BPM, time signature, and key with attachment management
 

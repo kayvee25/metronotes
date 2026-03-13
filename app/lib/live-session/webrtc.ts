@@ -86,6 +86,7 @@ export class HostConnectionManager {
   onIceCandidate:
     | ((peerId: string, candidate: RTCIceCandidateInit) => void)
     | null = null;
+  onBinaryChannelReady: ((peerId: string) => void) | null = null;
 
   /**
    * Create a new peer connection and generate an offer for a specific peer.
@@ -101,8 +102,7 @@ export class HostConnectionManager {
       ordered: true,
     });
     const binaryChannel = connection.createDataChannel('binary', {
-      ordered: false,
-      maxRetransmits: 3,
+      ordered: true,
     });
 
     const peer: ManagedPeer = {
@@ -171,12 +171,13 @@ export class HostConnectionManager {
     peerId: string,
     header: object,
     payload: ArrayBuffer
-  ): void {
+  ): boolean {
     const peer = this.peers.get(peerId);
     if (!peer?.binaryChannel || peer.binaryChannel.readyState !== 'open')
-      return;
+      return false;
     const frame = frameBinaryMessage(header, payload);
     peer.binaryChannel.send(frame);
+    return true;
   }
 
   disconnectPeer(peerId: string): void {
@@ -190,8 +191,18 @@ export class HostConnectionManager {
     return Array.from(this.peers.keys());
   }
 
+  getBinaryBufferedAmount(peerId: string): number {
+    const peer = this.peers.get(peerId);
+    return peer?.binaryChannel?.bufferedAmount ?? 0;
+  }
+
   getPeerStatus(peerId: string): PeerStatus | null {
     return this.peers.get(peerId)?.status ?? null;
+  }
+
+  isBinaryReady(peerId: string): boolean {
+    const peer = this.peers.get(peerId);
+    return peer?.binaryChannel?.readyState === 'open';
   }
 
   destroy(): void {
@@ -204,6 +215,7 @@ export class HostConnectionManager {
     this.onBinaryMessage = null;
     this.onPeerStatusChange = null;
     this.onIceCandidate = null;
+    this.onBinaryChannelReady = null;
   }
 
   // --- Private ---
@@ -227,6 +239,9 @@ export class HostConnectionManager {
     };
 
     binaryChannel.binaryType = 'arraybuffer';
+    binaryChannel.onopen = () => {
+      this.onBinaryChannelReady?.(peer.peerId);
+    };
     binaryChannel.onmessage = (event) => {
       const { header, payload } = parseBinaryMessage(event.data);
       this.onBinaryMessage?.(peer.peerId, header, payload);

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Attachment } from '../../types';
-import { AUDIO } from '../../lib/constants';
 import BackingTrackCard from './BackingTrackCard';
 import Modal from '../ui/Modal';
 import type { CloudProviderId } from '../../lib/cloud-providers/types';
@@ -22,9 +21,6 @@ interface BackingTrackSectionProps {
   onBtPlay?: () => void;
   onBtPause?: () => void;
   onBtSeek?: (time: number) => void;
-  // Count-in
-  countInBars?: number;
-  onCountInBarsChange?: (bars: number) => void;
 }
 
 export default function BackingTrackSection({
@@ -40,8 +36,6 @@ export default function BackingTrackSection({
   onBtPlay,
   onBtPause,
   onBtSeek,
-  countInBars = 1,
-  onCountInBarsChange,
 }: BackingTrackSectionProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
 
@@ -132,29 +126,6 @@ export default function BackingTrackSection({
           </svg>
           + Add Audio
         </button>
-      )}
-
-      {/* Count-in selector — below add button since it applies to entire song */}
-      {audioAttachments.length > 0 && onCountInBarsChange && (
-        <div className="flex items-center gap-3 mt-3">
-          <span className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">Count-in</span>
-          <div className="flex rounded-lg bg-[var(--card)] border border-[var(--border)] p-0.5 flex-1" role="group" aria-label="Count-in bars">
-            {(AUDIO.COUNT_IN_OPTIONS as readonly number[]).map((bars) => (
-              <button
-                key={bars}
-                onClick={() => onCountInBarsChange(bars)}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  countInBars === bars
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-                }`}
-                aria-label={bars === 0 ? 'No count-in' : `${bars} bar${bars > 1 ? 's' : ''} count-in`}
-              >
-                {bars === 0 ? 'Off' : bars}
-              </button>
-            ))}
-          </div>
-        </div>
       )}
 
       {addMenuModal}

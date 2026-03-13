@@ -1,22 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from './ui/Toast';
+import Modal from './ui/Modal';
 import HostDashboard from './live/HostDashboard';
 import MemberView from './live/MemberView';
+import type { Song } from '../types';
 import type { SessionSettings } from '../lib/live-session/protocol';
 import { DEFAULT_SESSION_SETTINGS } from '../lib/live-session/protocol';
+import { formatRoomCode } from '../lib/live-session/room-code';
 import type { UseHostSessionReturn } from '../hooks/useHostSession';
 import type { UseJoinSessionReturn } from '../hooks/useJoinSession';
 
 export interface LiveTabProps {
   hasSongs: boolean;
+  songs: Song[];
   onCreateSong: () => void;
   hostSession: UseHostSessionReturn;
   joinSession: UseJoinSessionReturn;
-  onSwitchToLibrary: () => void;
+  onAddSongsToSession: (songs: Song[]) => void;
   onNavigateToSong?: (queueIndex: number) => void;
+  onMemberShowPerformance?: () => void;
 }
 
 type LiveMode = 'idle' | 'hosting' | 'joining' | 'joined';
@@ -25,11 +30,13 @@ const GUEST_DISPLAY_NAME_KEY = 'metronotes_guest_display_name';
 
 export default function LiveTab({
   hasSongs,
+  songs,
   onCreateSong,
   hostSession,
   joinSession,
-  onSwitchToLibrary,
+  onAddSongsToSession,
   onNavigateToSong,
+  onMemberShowPerformance,
 }: LiveTabProps) {
   const { user, authState } = useAuth();
   const isGuest = authState === 'guest';
@@ -40,8 +47,10 @@ export default function LiveTab({
     if (joinSession.connectionStatus !== 'idle' && joinSession.connectionStatus !== 'ended') return 'joined';
     return 'idle';
   });
-  const [showSettings, setShowSettings] = useState(false);
-  const [sessionSettings, setSessionSettings] = useState<SessionSettings>(DEFAULT_SESSION_SETTINGS);
+  const [showStartForm, setShowStartForm] = useState(false);
+  const [sessionName, setSessionName] = useState(() => {
+    return user?.displayName ? `${user.displayName}'s Live Session` : 'My Live Session';
+  });
 
   // Join form state
   const [joinCode, setJoinCode] = useState('');
@@ -50,12 +59,26 @@ export default function LiveTab({
     return localStorage.getItem(GUEST_DISPLAY_NAME_KEY) ?? '';
   });
 
+  // Toast when host ends the session
+  const prevConnectionStatusRef = useRef(joinSession.connectionStatus);
+  useEffect(() => {
+    const prev = prevConnectionStatusRef.current;
+    prevConnectionStatusRef.current = joinSession.connectionStatus;
+    if (prev !== 'ended' && joinSession.connectionStatus === 'ended') {
+      toast('Session ended by host', 'error');
+    }
+  }, [joinSession.connectionStatus, toast]);
+
   // Start session (host)
   const handleStartSession = async () => {
     try {
-      await hostSession.startSession(sessionSettings);
+      const settings: SessionSettings = {
+        ...DEFAULT_SESSION_SETTINGS,
+        sessionName: sessionName.trim() || (user?.displayName ? `${user.displayName}'s Live Session` : 'My Live Session'),
+      };
+      await hostSession.startSession(settings);
       setMode('hosting');
-      setShowSettings(false);
+      setShowStartForm(false);
     } catch {
       toast('Failed to start session', 'error');
     }
@@ -100,6 +123,14 @@ export default function LiveTab({
     setMode('idle');
   };
 
+  // Handle adding songs by ID (from SongPicker)
+  const handleAddSongsById = (songIds: string[]) => {
+    const songsToAdd = songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => s != null);
+    if (songsToAdd.length > 0) {
+      onAddSongsToSession(songsToAdd);
+    }
+  };
+
   // Host dashboard
   if (mode === 'hosting' && hostSession.session) {
     return (
@@ -107,8 +138,9 @@ export default function LiveTab({
         session={hostSession.session}
         peers={hostSession.peers}
         currentSong={hostSession.currentSong}
+        songs={songs}
         onEndSession={handleEndSession}
-        onAddSongs={onSwitchToLibrary}
+        onAddSongsById={handleAddSongsById}
         onNavigateToSong={onNavigateToSong ?? hostSession.navigateToSong}
         onRemoveSong={hostSession.removeSongFromQueue}
         onReorderQueue={hostSession.reorderQueue}
@@ -123,7 +155,9 @@ export default function LiveTab({
         session={joinSession.session}
         connectionStatus={joinSession.connectionStatus}
         onLeave={handleLeaveSession}
-        pendingAssets={joinSession.pendingAssets}
+        onReconnect={joinSession.reconnect}
+        onShowPerformance={onMemberShowPerformance}
+        songDownloadStatus={joinSession.songDownloadStatus}
         currentBeat={joinSession.currentBeat}
         isBeating={joinSession.isBeating}
         clockSynced={joinSession.clockSynced}
@@ -192,12 +226,12 @@ export default function LiveTab({
     );
   }
 
-  // Settings sheet (start session config)
-  if (showSettings) {
+  // Start session form (single name input)
+  if (showStartForm) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[60vh] px-8 max-w-2xl mx-auto w-full">
         <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">
-          Session Settings
+          Start Session
         </h2>
 
         <div className="w-full max-w-xs space-y-4">
@@ -207,42 +241,13 @@ export default function LiveTab({
             </label>
             <input
               type="text"
-              value={sessionSettings.sessionName}
-              onChange={(e) =>
-                setSessionSettings((s) => ({
-                  ...s,
-                  sessionName: e.target.value,
-                }))
-              }
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
               maxLength={40}
               className="w-full px-4 py-3 rounded-xl bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              autoFocus
             />
           </div>
-
-          <ToggleRow
-            label="Metronome"
-            description="Sync metronome across all members"
-            value={sessionSettings.metronomeEnabled}
-            onChange={(v) =>
-              setSessionSettings((s) => ({ ...s, metronomeEnabled: v }))
-            }
-          />
-          <ToggleRow
-            label="Wait for sync"
-            description="Pause until all members are ready"
-            value={sessionSettings.waitForSync}
-            onChange={(v) =>
-              setSessionSettings((s) => ({ ...s, waitForSync: v }))
-            }
-          />
-          <ToggleRow
-            label="Allow late join"
-            description="New members can join mid-session"
-            value={sessionSettings.allowLateJoin}
-            onChange={(v) =>
-              setSessionSettings((s) => ({ ...s, allowLateJoin: v }))
-            }
-          />
 
           <button
             onClick={handleStartSession}
@@ -252,7 +257,7 @@ export default function LiveTab({
           </button>
 
           <button
-            onClick={() => setShowSettings(false)}
+            onClick={() => setShowStartForm(false)}
             className="w-full py-3 rounded-xl text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
           >
             Cancel
@@ -262,9 +267,82 @@ export default function LiveTab({
     );
   }
 
+  // Restore/rejoin handlers
+  const handleRestoreSession = async () => {
+    try {
+      await hostSession.restoreSession();
+      setMode('hosting');
+    } catch {
+      toast('Failed to restore session', 'error');
+      hostSession.clearPendingRestore();
+    }
+  };
+
+  const handleRejoinSession = async () => {
+    const info = joinSession.pendingRejoin;
+    if (!info) return;
+    const result = await joinSession.join(info.roomCode, info.displayName);
+    if (result.ok) {
+      setMode('joined');
+    } else {
+      toast(result.error, 'error');
+      joinSession.clearPendingRejoin();
+    }
+  };
+
   // Idle state — show session start/join options
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[60vh] text-center px-8 max-w-2xl mx-auto w-full">
+      {/* Session restore modal (host) */}
+      <Modal
+        isOpen={!!hostSession.pendingRestore}
+        onClose={hostSession.clearPendingRestore}
+        title="Session Interrupted"
+      >
+        <p className="text-sm text-[var(--muted)] text-center mb-6">
+          {hostSession.pendingRestore?.sessionName}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={hostSession.clearPendingRestore}
+            className="flex-1 py-3 rounded-xl text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          >
+            Dismiss
+          </button>
+          <button
+            onClick={handleRestoreSession}
+            className="flex-1 py-3 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all"
+          >
+            Restore
+          </button>
+        </div>
+      </Modal>
+
+      {/* Session rejoin modal (member) */}
+      <Modal
+        isOpen={!!joinSession.pendingRejoin}
+        onClose={joinSession.clearPendingRejoin}
+        title="Rejoin Session?"
+      >
+        <p className="text-sm text-[var(--muted)] text-center mb-6">
+          Room {joinSession.pendingRejoin ? formatRoomCode(joinSession.pendingRejoin.roomCode) : ''}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={joinSession.clearPendingRejoin}
+            className="flex-1 py-3 rounded-xl text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          >
+            Dismiss
+          </button>
+          <button
+            onClick={handleRejoinSession}
+            className="flex-1 py-3 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all"
+          >
+            Rejoin
+          </button>
+        </div>
+      </Modal>
+
       <svg
         className="w-20 h-20 text-[var(--muted)] mb-6"
         fill="none"
@@ -287,7 +365,7 @@ export default function LiveTab({
 
       <div className="w-full max-w-xs space-y-3">
         <button
-          onClick={() => setShowSettings(true)}
+          onClick={() => setShowStartForm(true)}
           disabled={isGuest}
           className="w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -326,37 +404,3 @@ export default function LiveTab({
   );
 }
 
-// --- Toggle Row ---
-
-function ToggleRow({
-  label,
-  description,
-  value,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <div>
-        <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
-        <p className="text-xs text-[var(--muted)]">{description}</p>
-      </div>
-      <button
-        onClick={() => onChange(!value)}
-        className={`relative w-11 h-6 rounded-full transition-colors ${
-          value ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${
-            value ? 'translate-x-5' : 'translate-x-0'
-          }`}
-        />
-      </button>
-    </div>
-  );
-}

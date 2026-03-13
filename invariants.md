@@ -7,7 +7,7 @@ System-wide behaviors that span multiple features. Every new spec MUST be checke
 ## Dirty State Tracking
 
 **Tracked fields** (SongView.tsx `OriginalValues`):
-- `name`, `artist`, `bpm`, `timeSignature`, `musicalKey`, `audioMode`, `countInBars`
+- `name`, `artist`, `bpm`, `timeSignature`, `musicalKey`, `audioMode`
 
 **Rules:**
 - Any change to a tracked field enables the Save button and blocks navigation

@@ -11,7 +11,9 @@ interface MemberViewProps {
   session: JoinedSession | null;
   connectionStatus: JoinStatus;
   onLeave: () => void;
-  pendingAssets?: number;
+  onReconnect: () => void;
+  onShowPerformance?: () => void;
+  songDownloadStatus?: Map<string, { total: number; received: number }>;
   // Metronome sync (Phase 4)
   currentBeat?: number;
   isBeating?: boolean;
@@ -75,7 +77,9 @@ export default function MemberView({
   session,
   connectionStatus,
   onLeave,
-  pendingAssets = 0,
+  onReconnect,
+  onShowPerformance,
+  songDownloadStatus,
   currentBeat = 0,
   isBeating = false,
   clockSynced = false,
@@ -155,10 +159,38 @@ export default function MemberView({
   // Connected state
   return (
     <div className="flex flex-col min-h-[calc(100vh-4rem)] px-6 pt-6 pb-4 max-w-2xl mx-auto w-full">
+      {/* Reconnection banner */}
+      {connectionStatus === 'reconnecting' && (
+        <div className="flex items-center justify-center gap-2 px-4 py-2.5 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+          <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          <span className="text-sm font-medium text-amber-400">
+            Connection lost — Reconnecting...
+          </span>
+        </div>
+      )}
+      {connectionStatus === 'disconnected' && (
+        <div className="flex flex-col items-center gap-2 px-4 py-3 mb-3 rounded-xl bg-red-500/10 border border-red-500/30">
+          <span className="text-sm font-medium text-red-400">
+            Disconnected
+          </span>
+          <button
+            onClick={onReconnect}
+            className="px-4 py-1.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:brightness-110 active:scale-95 transition-all"
+          >
+            Tap to rejoin
+          </button>
+        </div>
+      )}
+
       {/* Connection Status */}
       <div className="text-center mb-4">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+          <span className={`w-2.5 h-2.5 rounded-full ${
+            connectionStatus === 'connected' ? 'bg-green-500 animate-pulse'
+            : connectionStatus === 'reconnecting' ? 'bg-amber-500 animate-pulse'
+            : connectionStatus === 'disconnected' ? 'bg-red-500'
+            : 'bg-green-500 animate-pulse'
+          }`} />
           <span className={`text-sm font-medium ${statusInfo.color}`}>
             {statusInfo.text}
           </span>
@@ -166,11 +198,6 @@ export default function MemberView({
         {session && (
           <p className="text-xs text-[var(--muted)]">
             Room: {formatRoomCode(session.roomCode)}
-          </p>
-        )}
-        {pendingAssets > 0 && (
-          <p className="text-xs text-amber-400 mt-1">
-            Downloading assets... ({pendingAssets} remaining)
           </p>
         )}
         {!clockSynced && connectionStatus === 'connected' && (
@@ -191,12 +218,26 @@ export default function MemberView({
         />
       )}
 
+      {/* Go to current song button */}
+      {onShowPerformance && session?.currentIndex != null && session.queue[session.currentIndex] && (
+        <button
+          onClick={onShowPerformance}
+          className="flex items-center justify-center gap-2 w-full py-3 mb-3 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all"
+        >
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          {session.queue[session.currentIndex].song.name}
+        </button>
+      )}
+
       {/* Queue */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <SessionQueue
           queue={session?.queue ?? []}
           currentIndex={session?.currentIndex ?? null}
           isHost={false}
+          songDownloadStatus={songDownloadStatus}
         />
       </div>
 

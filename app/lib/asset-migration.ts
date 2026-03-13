@@ -1,17 +1,25 @@
 import { Attachment, Asset, AssetInput, Song } from '../types';
 import {
   firestoreGetAttachments,
+  firestoreGetAssets,
   firestoreCreateAsset,
+  firestoreUpdateAsset,
   firestoreUpdateAttachment,
 } from './firestore';
 import { storage } from './storage';
 import { generateId } from './utils';
+import { getStoragePath } from './storage-firebase';
+
+/** Legacy attachment fields that may exist in Firestore but are no longer in the TS type */
+interface LegacyAttachmentFields {
+  storagePath?: string;
+}
 
 /**
  * Creates an AssetInput from an existing Attachment.
  * Used during migration to extract assets from attachments.
  */
-export function assetFromAttachment(attachment: Attachment): AssetInput {
+export function assetFromAttachment(attachment: Attachment & LegacyAttachmentFields): AssetInput {
   const name = attachment.name
     || attachment.cloudFileName
     || attachment.fileName
@@ -25,6 +33,7 @@ export function assetFromAttachment(attachment: Attachment): AssetInput {
         mimeType: 'application/json',
         size: null,
         storageUrl: null,
+        storagePath: null,
         content: attachment.content,
       };
     case 'drawing':
@@ -34,6 +43,7 @@ export function assetFromAttachment(attachment: Attachment): AssetInput {
         mimeType: null,
         size: null,
         storageUrl: null,
+        storagePath: null,
         drawingData: attachment.drawingData,
       };
     case 'image':
@@ -43,6 +53,7 @@ export function assetFromAttachment(attachment: Attachment): AssetInput {
         mimeType: attachment.cloudMimeType || 'image/jpeg',
         size: attachment.fileSize || attachment.cloudFileSize || null,
         storageUrl: attachment.storageUrl || null,
+        storagePath: attachment.storagePath || null,
       };
     case 'pdf':
       return {
@@ -51,6 +62,7 @@ export function assetFromAttachment(attachment: Attachment): AssetInput {
         mimeType: 'application/pdf',
         size: attachment.fileSize || attachment.cloudFileSize || null,
         storageUrl: attachment.storageUrl || null,
+        storagePath: attachment.storagePath || null,
       };
     case 'audio':
       return {
@@ -59,6 +71,7 @@ export function assetFromAttachment(attachment: Attachment): AssetInput {
         mimeType: attachment.cloudMimeType || 'audio/mpeg',
         size: attachment.fileSize || attachment.cloudFileSize || null,
         storageUrl: attachment.storageUrl || null,
+        storagePath: attachment.storagePath || null,
       };
     default: {
       const _exhaustive: never = attachment.type;
@@ -94,6 +107,10 @@ export async function migrateAttachmentsToAssets(
   for (const { songId, attachment } of toMigrate) {
     try {
       const assetInput = assetFromAttachment(attachment);
+      // Derive storagePath if missing (for binary assets uploaded before migration)
+      if (!assetInput.storagePath && ['image', 'pdf', 'audio'].includes(assetInput.type)) {
+        assetInput.storagePath = getStoragePath(userId, songId, attachment.id);
+      }
       const asset = await firestoreCreateAsset(userId, assetInput);
       await firestoreUpdateAttachment(userId, songId, attachment.id, { assetId: asset.id });
     } catch {
@@ -125,6 +142,48 @@ export function migrateGuestAttachmentsToAssets(songs: Song[]): void {
         storage.createAsset(asset);
         storage.updateAttachment(song.id, att.id, { assetId });
       }
+    }
+  }
+}
+
+/**
+ * Patch existing assets that have storageUrl but no storagePath.
+ * Derives storagePath from the linked attachment's userId/songId/attachmentId.
+ * Idempotent — skips assets that already have storagePath.
+ */
+export async function migrateAssetStoragePaths(
+  userId: string,
+  songs: Song[],
+): Promise<void> {
+  const assets = await firestoreGetAssets(userId);
+  const needsPatch = assets.filter(
+    a => a.storageUrl && !a.storagePath && ['image', 'pdf', 'audio'].includes(a.type)
+  );
+  if (needsPatch.length === 0) return;
+
+  // Build assetId → { songId, attachmentId } lookup
+  const assetToAttachment = new Map<string, { songId: string; attachmentId: string }>();
+  const allAttachments = await Promise.all(
+    songs.map(song =>
+      firestoreGetAttachments(userId, song.id).then(atts => ({ songId: song.id, atts }))
+    )
+  );
+  for (const { songId, atts } of allAttachments) {
+    for (const att of atts) {
+      if (att.assetId) {
+        assetToAttachment.set(att.assetId, { songId, attachmentId: att.id });
+      }
+    }
+  }
+
+  for (const asset of needsPatch) {
+    const link = assetToAttachment.get(asset.id);
+    if (!link) continue;
+    const storagePath = getStoragePath(userId, link.songId, link.attachmentId);
+    try {
+      await firestoreUpdateAsset(userId, asset.id, { storagePath });
+    } catch {
+      // Non-critical — will retry next load
     }
   }
 }

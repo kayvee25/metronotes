@@ -20,9 +20,12 @@ import { SyncedMetronome } from '../lib/live-session/synced-metronome';
 import {
   storeSessionAsset,
   clearSessionStorage,
+  deleteSessionAssetsForSong,
+  getAllSessionAssetKeys,
 } from '../lib/live-session/session-storage';
 import type {
   JoinedSession,
+  QueueItem,
   HostMessage,
   MemberMessage,
   PeerStatus,
@@ -42,10 +45,43 @@ export type JoinStatus =
 
 export type JoinResult = { ok: true } | { ok: false; error: string };
 
+const MEMBER_SESSION_KEY = 'metronotes_member_session';
+const MEMBER_SNAPSHOT_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+function saveMemberSnapshot(roomCode: string, displayName: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(MEMBER_SESSION_KEY, JSON.stringify({ roomCode, displayName, savedAt: Date.now() }));
+  } catch { /* non-critical */ }
+}
+
+function loadMemberSnapshot(): { roomCode: string; displayName: string } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(MEMBER_SESSION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    // Check TTL
+    if (data.savedAt && Date.now() - data.savedAt > MEMBER_SNAPSHOT_TTL_MS) {
+      sessionStorage.removeItem(MEMBER_SESSION_KEY);
+      return null;
+    }
+    return { roomCode: data.roomCode, displayName: data.displayName };
+  } catch {
+    return null;
+  }
+}
+
+function clearMemberSnapshot() {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(MEMBER_SESSION_KEY);
+}
+
 export interface UseJoinSessionReturn {
   session: JoinedSession | null;
   join: (roomCode: string, displayName: string) => Promise<JoinResult>;
   leave: () => void;
+  reconnect: () => void;
   connectionStatus: JoinStatus;
   error: string | null;
   // Asset tracking (Phase 3)
@@ -57,6 +93,11 @@ export interface UseJoinSessionReturn {
   setMetronomeSound: (sound: MetronomeSound) => void;
   setMetronomeVolume: (volume: number) => void;
   setMetronomeMuted: (muted: boolean) => void;
+  // Per-song download status
+  songDownloadStatus: Map<string, { total: number; received: number }>;
+  // Session persistence (Phase 5)
+  pendingRejoin: { roomCode: string; displayName: string } | null;
+  clearPendingRejoin: () => void;
 }
 
 export function useJoinSession(): UseJoinSessionReturn {
@@ -67,6 +108,10 @@ export function useJoinSession(): UseJoinSessionReturn {
   const [currentBeat, setCurrentBeat] = useState(0);
   const [isBeating, setIsBeating] = useState(false);
   const [clockSynced, setClockSynced] = useState(false);
+  const [songDownloadStatus, setSongDownloadStatus] = useState<Map<string, { total: number; received: number }>>(new Map());
+  const [pendingRejoin, setPendingRejoin] = useState<{ roomCode: string; displayName: string } | null>(() => {
+    return loadMemberSnapshot();
+  });
 
   const managerRef = useRef<PeerConnectionManager | null>(null);
   const receiverRef = useRef<AssetTransferReceiver | null>(null);
@@ -75,8 +120,12 @@ export function useJoinSession(): UseJoinSessionReturn {
   const unsubSignalingRef = useRef<(() => void) | null>(null);
   const destroyedRef = useRef(false);
 
-  // Track which assets we've received or are receiving
-  const receivedAssetsRef = useRef(new Set<string>()); // assetId
+  // Store last join params for reconnection
+  const lastJoinRef = useRef<{ roomCode: string; displayName: string } | null>(null);
+
+  // Track which assets we've requested or received
+  const requestedAssetsRef = useRef(new Set<string>()); // assetId — requested but not yet received
+  const receivedAssetsRef = useRef(new Set<string>()); // assetId — fully received
   const pendingManifestsRef = useRef(new Map<string, AssetManifest[]>()); // songId → manifests
 
   const cleanup = useCallback(() => {
@@ -100,11 +149,12 @@ export function useJoinSession(): UseJoinSessionReturn {
       unsubSignalingRef.current();
       unsubSignalingRef.current = null;
     }
+    requestedAssetsRef.current.clear();
     receivedAssetsRef.current.clear();
     pendingManifestsRef.current.clear();
   }, []);
 
-  // Request missing assets from a manifest
+  // Request missing assets after receiving a manifest
   const requestMissingAssets = useCallback(
     (songId: string, manifests: AssetManifest[]) => {
       const manager = managerRef.current;
@@ -112,8 +162,11 @@ export function useJoinSession(): UseJoinSessionReturn {
 
       let newPending = 0;
       for (const manifest of manifests) {
+        // Skip if already requested or received
+        if (requestedAssetsRef.current.has(manifest.id)) continue;
         if (receivedAssetsRef.current.has(manifest.id)) continue;
 
+        requestedAssetsRef.current.add(manifest.id);
         const requestMsg: MemberMessage = {
           type: 'asset-request',
           songId,
@@ -144,6 +197,22 @@ export function useJoinSession(): UseJoinSessionReturn {
       setError(null);
       setPendingAssets(0);
       setConnectionStatus('connecting');
+      lastJoinRef.current = { roomCode: code, displayName };
+      saveMemberSnapshot(code, displayName);
+      setPendingRejoin(null);
+
+      // Pre-populate receivedAssetsRef from IndexedDB cache (for rejoin scenarios)
+      try {
+        const cachedKeys = await getAllSessionAssetKeys();
+        for (const key of cachedKeys) {
+          const assetId = key.split(':')[1];
+          if (assetId) {
+            receivedAssetsRef.current.add(assetId);
+          }
+        }
+      } catch {
+        // IndexedDB unavailable — all assets will be re-requested
+      }
 
       try {
         // Check if room exists
@@ -166,9 +235,21 @@ export function useJoinSession(): UseJoinSessionReturn {
           if (destroyedRef.current) return;
           receivedAssetsRef.current.add(assetId);
           setPendingAssets((prev) => Math.max(0, prev - 1));
+          // Update per-song download status (compute from ref for robustness)
+          setSongDownloadStatus((prev) => {
+            const next = new Map(prev);
+            const manifests = pendingManifestsRef.current.get(songId);
+            if (manifests) {
+              const received = manifests.filter(a => receivedAssetsRef.current.has(a.id)).length;
+              next.set(songId, { total: manifests.length, received });
+            }
+            return next;
+          });
 
           // Store in IndexedDB
-          await storeSessionAsset(songId, assetId, data).catch(() => {});
+          await storeSessionAsset(songId, assetId, data).catch((err) => {
+            console.error(`[member] Failed to store asset:`, err);
+          });
 
           // Notify host
           const ackMsg: MemberMessage = {
@@ -179,10 +260,51 @@ export function useJoinSession(): UseJoinSessionReturn {
           manager.send(JSON.stringify(ackMsg));
         };
 
+        const retriedAssetsRef = new Set<string>();
         receiver.onAssetError = (songId, assetId, error) => {
-          console.warn(`[session] Asset transfer error: ${songId}/${assetId}: ${error}`);
+          console.warn(`[member] Asset transfer error: ${songId}/${assetId}: ${error}`);
+
+          // Retry once on checksum mismatch
+          if (error === 'Checksum mismatch' && !retriedAssetsRef.has(assetId)) {
+            retriedAssetsRef.add(assetId);
+            requestedAssetsRef.current.delete(assetId);
+            const manifests = pendingManifestsRef.current.get(songId);
+            const manifest = manifests?.find(m => m.id === assetId);
+            if (manifest) {
+              requestMissingAssets(songId, [manifest]);
+              return;
+            }
+          }
+
+          // Give up — mark as received so spinner doesn't hang
+          // (attachment may still render via Firebase storageUrl fallback)
+          receivedAssetsRef.current.add(assetId);
           setPendingAssets((prev) => Math.max(0, prev - 1));
-          // Could retry here
+          setSongDownloadStatus((prev) => {
+            const next = new Map(prev);
+            const manifests = pendingManifestsRef.current.get(songId);
+            if (manifests) {
+              const received = manifests.filter(a => receivedAssetsRef.current.has(a.id)).length;
+              next.set(songId, { total: manifests.length, received });
+            }
+            return next;
+          });
+        };
+
+        // Process asset manifests embedded in queue items
+        const processQueueManifests = (queue: QueueItem[]) => {
+          for (const item of queue) {
+            if (item.assets && item.assets.length > 0) {
+              pendingManifestsRef.current.set(item.songId, item.assets);
+              const alreadyReceived = item.assets.filter(a => receivedAssetsRef.current.has(a.id)).length;
+              setSongDownloadStatus((prev) => {
+                const next = new Map(prev);
+                next.set(item.songId, { total: item.assets!.length, received: alreadyReceived });
+                return next;
+              });
+              requestMissingAssets(item.songId, item.assets);
+            }
+          }
         };
 
         // Handle messages from host
@@ -195,6 +317,7 @@ export function useJoinSession(): UseJoinSessionReturn {
               setConnectionStatus('ended');
               setSession(null);
               clearSessionStorage().catch(() => {});
+              clearMemberSnapshot();
               cleanup();
               return;
             }
@@ -207,13 +330,23 @@ export function useJoinSession(): UseJoinSessionReturn {
                 metronome: parsed.metronome,
                 connectionStatus: 'connected',
               });
+              processQueueManifests(parsed.queue);
             }
 
             if (parsed.type === 'queue-update') {
               setSession((prev) => {
                 if (!prev) return prev;
+                // Diff queue to clean up assets for removed songs
+                const prevSongIds = new Set(prev.queue.map(q => q.songId));
+                const newSongIds = new Set(parsed.queue.map((q: { songId: string }) => q.songId));
+                for (const songId of prevSongIds) {
+                  if (!newSongIds.has(songId)) {
+                    deleteSessionAssetsForSong(songId).catch(() => {});
+                  }
+                }
                 return { ...prev, queue: parsed.queue };
               });
+              processQueueManifests(parsed.queue);
             }
 
             if (parsed.type === 'song-change') {
@@ -234,11 +367,10 @@ export function useJoinSession(): UseJoinSessionReturn {
                 });
                 return { ...prev, queue: updatedQueue };
               });
-            }
-
-            if (parsed.type === 'asset-manifest') {
-              pendingManifestsRef.current.set(parsed.songId, parsed.assets);
-              requestMissingAssets(parsed.songId, parsed.assets);
+              // Process any asset manifests included in the update
+              if (parsed.assets && parsed.assets.length > 0) {
+                processQueueManifests([{ queueIndex: 0, songId: parsed.song.id, song: parsed.song, attachments: parsed.attachments, assets: parsed.assets }]);
+              }
             }
 
             if (parsed.type === 'metronome-update') {
@@ -268,7 +400,8 @@ export function useJoinSession(): UseJoinSessionReturn {
         // Handle binary messages (asset chunks)
         manager.onBinaryMessage = (header, data) => {
           if (destroyedRef.current) return;
-          receiver.handleChunk(header as TransferHeader, data);
+          const h = header as TransferHeader;
+          receiver.handleChunk(h, data);
         };
 
         manager.onStatusChange = (status: PeerStatus) => {
@@ -395,6 +528,7 @@ export function useJoinSession(): UseJoinSessionReturn {
     destroyedRef.current = true;
     cleanup();
     clearSessionStorage().catch(() => {});
+    clearMemberSnapshot();
     setSession(null);
     setConnectionStatus('idle');
     setError(null);
@@ -402,7 +536,14 @@ export function useJoinSession(): UseJoinSessionReturn {
     setCurrentBeat(0);
     setIsBeating(false);
     setClockSynced(false);
+    setSongDownloadStatus(new Map());
   }, [cleanup]);
+
+  const reconnect = useCallback(() => {
+    const params = lastJoinRef.current;
+    if (!params) return;
+    join(params.roomCode, params.displayName);
+  }, [join]);
 
   const setMetronomeSound = useCallback((sound: MetronomeSound) => {
     syncedMetronomeRef.current?.setSound(sound);
@@ -414,6 +555,12 @@ export function useJoinSession(): UseJoinSessionReturn {
 
   const setMetronomeMuted = useCallback((muted: boolean) => {
     syncedMetronomeRef.current?.setMuted(muted);
+  }, []);
+
+  const clearPendingRejoin = useCallback(() => {
+    clearMemberSnapshot();
+    clearSessionStorage().catch(() => {});
+    setPendingRejoin(null);
   }, []);
 
   // Cleanup on unmount
@@ -428,6 +575,7 @@ export function useJoinSession(): UseJoinSessionReturn {
     session,
     join,
     leave,
+    reconnect,
     connectionStatus,
     error,
     pendingAssets,
@@ -437,5 +585,8 @@ export function useJoinSession(): UseJoinSessionReturn {
     setMetronomeSound,
     setMetronomeVolume,
     setMetronomeMuted,
+    songDownloadStatus,
+    pendingRejoin,
+    clearPendingRejoin,
   };
 }

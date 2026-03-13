@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useConfirm } from './ui/ConfirmModal';
 import { Setlist, Song, Attachment } from '../types';
-import { useSetlists } from '../hooks/useSetlists';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from './ui/Toast';
 import { useOfflineDownload } from '../hooks/useOfflineDownload';
@@ -35,6 +34,9 @@ interface SetlistDetailProps {
   songs: Song[];
   onBack: () => void;
   onPlay?: (setlist: Setlist, startIndex?: number) => void;
+  updateSetlist: (id: string, update: { songIds: string[] }) => Promise<Setlist | null>;
+  removeSongFromSetlist: (setlistId: string, songId: string) => Promise<Setlist | null>;
+  reorderSongs: (setlistId: string, songIds: string[]) => Promise<Setlist | null>;
 }
 
 interface SortableSongItemProps {
@@ -134,17 +136,16 @@ function SortableSongItem({ song, index, onPlay, onRemove }: SortableSongItemPro
   );
 }
 
-export default function SetlistDetail({ setlist, songs, onBack, onPlay }: SetlistDetailProps) {
+export default function SetlistDetail({ setlist, songs, onBack, onPlay, updateSetlist, removeSongFromSetlist, reorderSongs }: SetlistDetailProps) {
   const { toast } = useToast();
-  const { setlists, updateSetlist, removeSongFromSetlist, reorderSongs } = useSetlists(toast);
   const [showSongPicker, setShowSongPicker] = useState(false);
   const { user, authState } = useAuth();
   const isGuest = authState === 'guest';
   const { status: dlStatus, progress: dlProgress, downloadAttachments, errorMessage: dlError } = useOfflineDownload();
   const [allCached, setAllCached] = useState<boolean | null>(null);
 
-  // Get the current setlist from hook state (stays in sync after updates)
-  const currentSetlist = setlists.find((s) => s.id === setlist.id) || setlist;
+  // Use the setlist prop directly — parent keeps it in sync
+  const currentSetlist = setlist;
 
   // Get songs in setlist order
   const setlistSongs = currentSetlist.songIds
@@ -169,9 +170,9 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
     })
   );
 
-  const handleAddSongs = (songIds: string[]) => {
+  const handleAddSongs = async (songIds: string[]) => {
     const newSongIds = [...currentSetlist.songIds, ...songIds.filter((id) => !currentSetlist.songIds.includes(id))];
-    updateSetlist(currentSetlist.id, { songIds: newSongIds });
+    await updateSetlist(currentSetlist.id, { songIds: newSongIds });
     setShowSongPicker(false);
   };
 
@@ -186,7 +187,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
       confirmLabel: 'Remove',
       variant: 'danger',
     });
-    if (ok) removeSongFromSetlist(currentSetlist.id, songId);
+    if (ok) await removeSongFromSetlist(currentSetlist.id, songId);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -196,7 +197,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay }: Setlis
       const oldIndex = currentSetlist.songIds.indexOf(active.id as string);
       const newIndex = currentSetlist.songIds.indexOf(over.id as string);
       const newSongIds = arrayMove(currentSetlist.songIds, oldIndex, newIndex);
-      reorderSongs(currentSetlist.id, newSongIds);
+      reorderSongs(currentSetlist.id, newSongIds); // fire-and-forget for drag UX
     }
   };
 

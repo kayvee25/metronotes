@@ -20,11 +20,11 @@ interface SongLibraryProps {
   songs: Song[];
   isLoading: boolean;
   error: string | null;
-  deleteSong: (id: string, keepFiles?: boolean) => boolean;
+  deleteSong: (id: string, keepFiles?: boolean) => Promise<boolean>;
   refresh: () => Promise<void>;
   onSelectSong?: (song: Song) => void;
   onEditSong?: (song: Song) => void;
-  onCreateSong?: (input: SongInput) => Song | null;
+  onCreateSong?: (input: SongInput) => Promise<Song | null>;
   onQuickAddSong?: (song: Song) => void;
   isGuest?: boolean;
   onAddToSession?: (songs: Song[]) => void;
@@ -72,9 +72,9 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
 
   const [deleteTarget, setDeleteTarget] = useState<Song | null>(null);
 
-  const handleDeleteConfirm = (keepFiles: boolean) => {
+  const handleDeleteConfirm = async (keepFiles: boolean) => {
     if (deleteTarget) {
-      deleteSong(deleteTarget.id, keepFiles);
+      await deleteSong(deleteTarget.id, keepFiles);
       setDeleteTarget(null);
     }
   };
@@ -90,12 +90,12 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
     }
   };
 
-  const handleQuickAdd = () => {
+  const handleQuickAdd = async () => {
     const trimmedName = qaName.trim();
     if (!trimmedName || !onCreateSong) return;
     const bpmVal = parseInt(qaBpm) || BPM.DEFAULT;
     const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpmVal));
-    const newSong = onCreateSong({
+    const newSong = await onCreateSong({
       name: trimmedName,
       bpm: clampedBpm,
       timeSignature: qaTimeSig,

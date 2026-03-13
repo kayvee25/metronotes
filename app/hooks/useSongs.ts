@@ -70,7 +70,7 @@ export function useSongs(onError?: (message: string) => void) {
     }
   }, [isGuest, userId]);
 
-  const createSong = useCallback((input: SongInput): Song | null => {
+  const createSong = useCallback(async (input: SongInput): Promise<Song | null> => {
     if (isGuest) {
       if (songs.length >= GUEST.MAX_SONGS) {
         onErrorRef.current?.(`Guest mode is limited to ${GUEST.MAX_SONGS} songs. Sign in for unlimited songs.`);
@@ -80,50 +80,46 @@ export function useSongs(onError?: (message: string) => void) {
       setSongs(storage.getSongs());
       return song;
     }
-    // For Firestore, create optimistically with a temp song
-    const tempId = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const tempSong: Song = { ...input, id: tempId, createdAt: now, updatedAt: now };
-    setSongs(prev => [...prev, tempSong]);
 
-    if (userId) {
-      firestoreCreateSong(userId, input).then((song) => {
-        setSongs(prev => prev.map(s => s.id === tempId ? song : s));
-      }).catch(() => {
-        setSongs(prev => prev.filter(s => s.id !== tempId));
-        onErrorRef.current?.("Can't save — check your internet connection.");
-      });
+    if (!userId) return null;
+
+    try {
+      const song = await firestoreCreateSong(userId, input);
+      setSongs(prev => [...prev, song]);
+      return song;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return tempSong;
   }, [isGuest, userId, songs.length]);
 
-  const updateSong = useCallback((id: string, update: SongUpdate): Song | null => {
+  const updateSong = useCallback(async (id: string, update: SongUpdate): Promise<Song | null> => {
     if (isGuest) {
       const song = storage.updateSong(id, update);
       if (song) setSongs(storage.getSongs());
       return song;
     }
 
-    // Optimistic update
-    let updated: Song | null = null;
-    setSongs(prev => prev.map(s => {
-      if (s.id === id) {
-        updated = { ...s, ...update, updatedAt: new Date().toISOString() };
-        return updated;
-      }
-      return s;
-    }));
+    if (!userId) return null;
 
-    if (userId) {
-      firestoreUpdateSong(userId, id, update).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetSongs(userId).then(setSongs).catch(() => {});
-      });
+    try {
+      await firestoreUpdateSong(userId, id, update);
+      let updated: Song | null = null;
+      setSongs(prev => prev.map(s => {
+        if (s.id === id) {
+          updated = { ...s, ...update, updatedAt: new Date().toISOString() };
+          return updated;
+        }
+        return s;
+      }));
+      return updated;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return updated;
   }, [isGuest, userId]);
 
-  const deleteSong = useCallback((id: string, keepFiles: boolean = false): boolean => {
+  const deleteSong = useCallback(async (id: string, keepFiles: boolean = false): Promise<boolean> => {
     if (isGuest) {
       const attachments = storage.getAttachments(id);
       if (!keepFiles) {
@@ -138,29 +134,26 @@ export function useSongs(onError?: (message: string) => void) {
       return result;
     }
 
-    // Optimistic delete
-    setSongs(prev => prev.filter(s => s.id !== id));
+    if (!userId) return false;
 
-    if (userId) {
-      firestoreGetAttachments(userId, id)
-        .then(async (attachments) => {
-          if (!keepFiles) {
-            const assetIds = attachments.map(a => a.assetId).filter((aid): aid is string => !!aid);
-            const results = await Promise.allSettled(assetIds.map(assetId => firestoreDeleteAsset(userId, assetId)));
-            const failures = results.filter(r => r.status === 'rejected').length;
-            if (failures > 0) {
-              onErrorRef.current?.(`${failures} file(s) could not be deleted. They may still exist in your library.`);
-            }
-          }
-          await firestoreDeleteAllAttachments(userId, id);
-          await firestoreDeleteSong(userId, id);
-        })
-        .catch(() => {
-          onErrorRef.current?.("Can't delete — check your internet connection.");
-          firestoreGetSongs(userId).then(setSongs).catch(() => {});
-        });
+    try {
+      const attachments = await firestoreGetAttachments(userId, id);
+      if (!keepFiles) {
+        const assetIds = attachments.map(a => a.assetId).filter((aid): aid is string => !!aid);
+        const results = await Promise.allSettled(assetIds.map(assetId => firestoreDeleteAsset(userId, assetId)));
+        const failures = results.filter(r => r.status === 'rejected').length;
+        if (failures > 0) {
+          onErrorRef.current?.(`${failures} file(s) could not be deleted. They may still exist in your library.`);
+        }
+      }
+      await firestoreDeleteAllAttachments(userId, id);
+      await firestoreDeleteSong(userId, id);
+      setSongs(prev => prev.filter(s => s.id !== id));
+      return true;
+    } catch {
+      onErrorRef.current?.("Can't delete — check your internet connection.");
+      return false;
     }
-    return true;
   }, [isGuest, userId]);
 
   const getSong = useCallback((id: string): Song | null => {

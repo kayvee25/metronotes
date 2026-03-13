@@ -235,16 +235,16 @@ function AppInner() {
     }
   };
 
-  const handleSaveSong = (data: SongInput) => {
+  const handleSaveSong = async (data: SongInput) => {
     let savedSong: Song | undefined;
     if (currentSong) {
-      const updated = updateSong(currentSong.id, data);
+      const updated = await updateSong(currentSong.id, data);
       if (updated) {
         setActiveSong(updated);
         savedSong = updated;
       }
     } else {
-      const newSong = createSong(data);
+      const newSong = await createSong(data);
       if (!newSong) return;
       setActiveSong(newSong);
       savedSong = newSong;
@@ -356,8 +356,8 @@ function AppInner() {
     songViewRef.current?.save();
   };
 
-  const handleRenameAsset = (id: string, name: string) => {
-    updateAsset(id, { name });
+  const handleRenameAsset = async (id: string, name: string) => {
+    await updateAsset(id, { name });
   };
 
   const handleDeleteAsset = async (id: string) => {
@@ -394,7 +394,7 @@ function AppInner() {
     if (cascadeErrors > 0) {
       toast(`${cascadeErrors} attachment(s) could not be unlinked. They may still reference the deleted file.`);
     }
-    deleteAsset(id);
+    await deleteAsset(id);
     refreshAssetLinkage();
   };
 

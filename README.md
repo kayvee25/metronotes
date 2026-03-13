@@ -39,6 +39,16 @@ A mobile-first PWA for musicians to manage songs, setlists, and a metronome — 
 - **Offline Banner** — Subtle notification when the app detects you're offline
 - **Cache Management** — View cache size and clear cached content from Settings
 
+### Live Session
+- **Host & Join** — Bandleader starts a session from any song or setlist; members join via 6-digit room code
+- **Real-Time Sync** — Song changes, queue navigation, and transport state sync instantly to all members via WebRTC data channels
+- **Asset Transfer** — Songs, attachments, and backing tracks transfer peer-to-peer with chunked streaming and SHA-256 integrity checks
+- **Synced Metronome** — NTP-lite clock synchronization keeps metronome beats aligned across all devices
+- **Session Queue** — Setlist songs appear as an ordered queue; host controls navigation, members follow along
+- **Session Persistence** — Sessions survive app restart; reconnects automatically on return
+- **Guest Access** — Anyone can join a session without signing in (hosting requires authentication)
+- **Session Assets** — Transferred assets stored in separate IndexedDB cache, cleaned up on session end
+
 ### UX
 - **Toast Notifications** — Auto-dismissing, stackable toast messages for errors and confirmations
 - **Warm Theme** — Warm amber/cream light theme and deep espresso dark theme for stage visibility
@@ -56,6 +66,7 @@ A mobile-first PWA for musicians to manage songs, setlists, and a metronome — 
 - **Rich Text:** Tiptap
 - **PDF:** pdfjs-dist (lazy-loaded)
 - **Drawing:** perfect-freehand
+- **Real-Time:** WebRTC (data channels + Google STUN)
 - **Drag & Drop:** @dnd-kit
 - **Offline Storage:** idb-keyval (IndexedDB)
 - **Hosting:** Vercel
@@ -94,7 +105,8 @@ The app is a client-side SPA built on Next.js. `App.tsx` is the root component t
 - **Auth:** Google OAuth, email/password with verification, and guest mode
 - **Data:** Firestore for authenticated users (`users/{userId}/songs/{songId}`), localStorage for guests. Attachments stored as subcollections (`songs/{songId}/attachments/{attachmentId}`) with media files in Cloud Storage.
 - **Cloud Providers:** Google Drive integration via Identity Services (OAuth) and Picker API. Cloud-linked files stored as metadata references; actual files fetched on demand and cached in IndexedDB.
-- **Sync:** Optimistic writes with error rollback; manual refresh; last-write-wins conflict resolution
+- **Sync:** Server-awaited writes with error handling; manual refresh; last-write-wins conflict resolution
+- **Live Session:** WebRTC star topology with Firestore signaling; chunked P2P asset transfer; NTP-lite clock sync for metronome
 - **Offline:** IndexedDB cache for media blobs (images, PDFs, audio, cloud-linked files); drawings and text are JSON and work offline without caching. Download status tracked per-song and per-setlist. Next song's audio preloaded during setlist performance.
 - **Navigation:** Bottom nav bar with 3 tabs; song view opens on top with back navigation; Android back button supported
 - **Migration:** Plain-text notes auto-migrate to rich attachments on first load; guest data (including drawings) migrates to Firestore on sign-in

@@ -72,7 +72,7 @@ Full UX redesign + asset foundation layer. Restructures navigation to Library (S
 ### Release 1: Live Session
 WebRTC-based real-time session sync. Bandleader starts a session from their own songs/setlists, members join via room code. Songs sync in real-time, assets transfer P2P. Firestore signaling for connection establishment (Google free STUN servers for NAT traversal). Session assets stored in separate IndexedDB store, cleaned up on session end. Guests can join sessions (no auth needed for WebRTC peers) but cannot host. Session persistence across app restart for reliability. Display names for guest members (persisted), auto-use account name for signed-in users.
 
-**Status:** Not started. Release 0 shipped — ready to begin.
+**Status:** Shipped (PR #10, merged 2026-03-14)
 
 **Spec:** `spec-live-session.md` | **Plan:** `plan-release-1-live-session.md` (5 phases)
 
@@ -81,7 +81,7 @@ Shared setlists with join-code invitations, cross-user song access, contributor 
 
 **DB sync strategy (v1):** Denormalized `memberIds` array on setlists and `sharedWith` array on songs for Firestore security rules, kept in sync via batch writes — no Cloud Functions. Every membership mutation goes through `syncSharedWithForSetlist()` which updates all affected documents atomically. Acceptable at current scale.
 
-**Status:** Not started. Depends on Release 0 and Release 1.
+**Status:** Not started. Release 0 and Release 1 shipped — ready to begin.
 
 **Spec:** `spec-collaboration.md` | **Plan:** `plan-release-2-collaboration.md` (5 phases)
 

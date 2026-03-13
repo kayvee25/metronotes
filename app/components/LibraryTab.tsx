@@ -21,11 +21,11 @@ interface LibraryTabProps {
   songs: Song[];
   songsLoading: boolean;
   songsError: string | null;
-  deleteSong: (id: string, keepFiles?: boolean) => boolean;
+  deleteSong: (id: string, keepFiles?: boolean) => Promise<boolean>;
   refreshSongs: () => Promise<void>;
   onSelectSong: (song: Song) => void;
   onEditSong: (song: Song) => void;
-  onCreateSong: (data: SongInput) => Song | null;
+  onCreateSong: (data: SongInput) => Promise<Song | null>;
   onQuickAddSong: (song: Song) => void;
   isGuest: boolean;
   onPlaySetlist: (setlist: Setlist, startIndex?: number) => void;

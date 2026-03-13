@@ -65,77 +65,75 @@ export function useSetlists(onError?: (message: string) => void) {
     }
   }, [isGuest, userId]);
 
-  const createSetlist = useCallback((input: SetlistInput): Setlist => {
+  const createSetlist = useCallback(async (input: SetlistInput): Promise<Setlist | null> => {
     if (isGuest) {
       const setlist = storage.createSetlist(input);
       setSetlists(storage.getSetlists());
       return setlist;
     }
 
-    const tempId = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const tempSetlist: Setlist = { ...input, id: tempId, createdAt: now, updatedAt: now };
-    setSetlists(prev => [...prev, tempSetlist]);
+    if (!userId) return null;
 
-    if (userId) {
-      firestoreCreateSetlist(userId, input).then((setlist) => {
-        setSetlists(prev => prev.map(s => s.id === tempId ? setlist : s));
-      }).catch(() => {
-        setSetlists(prev => prev.filter(s => s.id !== tempId));
-        onErrorRef.current?.("Can't save — check your internet connection.");
-      });
+    try {
+      const setlist = await firestoreCreateSetlist(userId, input);
+      setSetlists(prev => [...prev, setlist]);
+      return setlist;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return tempSetlist;
   }, [isGuest, userId]);
 
-  const updateSetlist = useCallback((id: string, update: SetlistUpdate): Setlist | null => {
+  const updateSetlist = useCallback(async (id: string, update: SetlistUpdate): Promise<Setlist | null> => {
     if (isGuest) {
       const setlist = storage.updateSetlist(id, update);
       if (setlist) setSetlists(storage.getSetlists());
       return setlist;
     }
 
-    let updated: Setlist | null = null;
-    setSetlists(prev => prev.map(s => {
-      if (s.id === id) {
-        updated = { ...s, ...update, updatedAt: new Date().toISOString() };
-        return updated;
-      }
-      return s;
-    }));
+    if (!userId) return null;
 
-    if (userId) {
-      firestoreUpdateSetlist(userId, id, update).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
-      });
+    try {
+      await firestoreUpdateSetlist(userId, id, update);
+      let updated: Setlist | null = null;
+      setSetlists(prev => prev.map(s => {
+        if (s.id === id) {
+          updated = { ...s, ...update, updatedAt: new Date().toISOString() };
+          return updated;
+        }
+        return s;
+      }));
+      return updated;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return updated;
   }, [isGuest, userId]);
 
-  const deleteSetlist = useCallback((id: string): boolean => {
+  const deleteSetlist = useCallback(async (id: string): Promise<boolean> => {
     if (isGuest) {
       const result = storage.deleteSetlist(id);
       if (result) setSetlists(storage.getSetlists());
       return result;
     }
 
-    setSetlists(prev => prev.filter(s => s.id !== id));
+    if (!userId) return false;
 
-    if (userId) {
-      firestoreDeleteSetlist(userId, id).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
-      });
+    try {
+      await firestoreDeleteSetlist(userId, id);
+      setSetlists(prev => prev.filter(s => s.id !== id));
+      return true;
+    } catch {
+      onErrorRef.current?.("Can't delete — check your internet connection.");
+      return false;
     }
-    return true;
   }, [isGuest, userId]);
 
   const getSetlist = useCallback((id: string): Setlist | null => {
     return setlists.find(s => s.id === id) || null;
   }, [setlists]);
 
-  const addSongToSetlist = useCallback((setlistId: string, songId: string): Setlist | null => {
+  const addSongToSetlist = useCallback(async (setlistId: string, songId: string): Promise<Setlist | null> => {
     const setlist = setlists.find(s => s.id === setlistId);
     if (!setlist || setlist.songIds.includes(songId)) return setlist || null;
 
@@ -147,19 +145,20 @@ export function useSetlists(onError?: (message: string) => void) {
       return result;
     }
 
-    const updated: Setlist = { ...setlist, ...update, updatedAt: new Date().toISOString() };
-    setSetlists(prev => prev.map(s => s.id === setlistId ? updated : s));
+    if (!userId) return null;
 
-    if (userId) {
-      firestoreUpdateSetlist(userId, setlistId, update).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
-      });
+    try {
+      await firestoreUpdateSetlist(userId, setlistId, update);
+      const updated: Setlist = { ...setlist, ...update, updatedAt: new Date().toISOString() };
+      setSetlists(prev => prev.map(s => s.id === setlistId ? updated : s));
+      return updated;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return updated;
   }, [setlists, isGuest, userId]);
 
-  const removeSongFromSetlist = useCallback((setlistId: string, songId: string): Setlist | null => {
+  const removeSongFromSetlist = useCallback(async (setlistId: string, songId: string): Promise<Setlist | null> => {
     const setlist = setlists.find(s => s.id === setlistId);
     if (!setlist) return null;
 
@@ -171,19 +170,20 @@ export function useSetlists(onError?: (message: string) => void) {
       return result;
     }
 
-    const updated: Setlist = { ...setlist, ...update, updatedAt: new Date().toISOString() };
-    setSetlists(prev => prev.map(s => s.id === setlistId ? updated : s));
+    if (!userId) return null;
 
-    if (userId) {
-      firestoreUpdateSetlist(userId, setlistId, update).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
-      });
+    try {
+      await firestoreUpdateSetlist(userId, setlistId, update);
+      const updated: Setlist = { ...setlist, ...update, updatedAt: new Date().toISOString() };
+      setSetlists(prev => prev.map(s => s.id === setlistId ? updated : s));
+      return updated;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return updated;
   }, [setlists, isGuest, userId]);
 
-  const reorderSongs = useCallback((setlistId: string, songIds: string[]): Setlist | null => {
+  const reorderSongs = useCallback(async (setlistId: string, songIds: string[]): Promise<Setlist | null> => {
     const update = { songIds };
 
     if (isGuest) {
@@ -192,19 +192,20 @@ export function useSetlists(onError?: (message: string) => void) {
       return result;
     }
 
+    if (!userId) return null;
+
     const setlist = setlists.find(s => s.id === setlistId);
     if (!setlist) return null;
 
-    const updated: Setlist = { ...setlist, ...update, updatedAt: new Date().toISOString() };
-    setSetlists(prev => prev.map(s => s.id === setlistId ? updated : s));
-
-    if (userId) {
-      firestoreUpdateSetlist(userId, setlistId, update).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetSetlists(userId).then(setSetlists).catch(() => {});
-      });
+    try {
+      await firestoreUpdateSetlist(userId, setlistId, update);
+      const updated: Setlist = { ...setlist, ...update, updatedAt: new Date().toISOString() };
+      setSetlists(prev => prev.map(s => s.id === setlistId ? updated : s));
+      return updated;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-    return updated;
   }, [setlists, isGuest, userId]);
 
   return {

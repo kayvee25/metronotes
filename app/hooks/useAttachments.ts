@@ -20,42 +20,28 @@ import { removeCachedBlob, downloadAndCache } from '../lib/offline-cache';
 import { getGuestBlob, deleteGuestBlob } from '../lib/guest-blob-storage';
 import { generateId, getTimestamp } from '../lib/utils';
 
-/** Shared helper: create attachment + asset in parallel, then link them.
- * If one creation fails, the other is cleaned up to avoid orphans.
- * If the link step fails, both entities exist but are unlinked — migration will fix. */
+/** Create attachment + asset, then link them atomically.
+ * If any step fails, cleans up and throws. */
 async function createLinkedAttachmentAndAsset(
   userId: string,
   songId: string,
   attachmentInput: AttachmentInput,
   assetInput: AssetInput,
 ): Promise<{ attachment: Attachment; assetId: string }> {
-  const [attResult, assetResult] = await Promise.allSettled([
-    firestoreCreateAttachment(userId, songId, attachmentInput),
-    firestoreCreateAsset(userId, assetInput),
-  ]);
+  // Create asset first
+  const asset = await firestoreCreateAsset(userId, assetInput);
 
-  const attachment = attResult.status === 'fulfilled' ? attResult.value : null;
-  const asset = assetResult.status === 'fulfilled' ? assetResult.value : null;
-
-  if (!attachment && !asset) {
-    // Both failed
-    throw attResult.status === 'rejected' ? attResult.reason : new Error('Failed to create attachment and asset');
-  }
-  if (attachment && !asset) {
-    // Attachment created but asset failed — acceptable, just no asset link
-    return { attachment, assetId: '' };
-  }
-  if (asset && !attachment) {
-    // Asset created but attachment failed — delete the orphaned asset
+  // Create attachment with assetId already set
+  let attachment: Attachment;
+  try {
+    attachment = await firestoreCreateAttachment(userId, songId, { ...attachmentInput, assetId: asset.id });
+  } catch (err) {
+    // Attachment creation failed — clean up the orphaned asset
     firestoreDeleteAsset(userId, asset.id).catch(() => {});
-    throw assetResult.status === 'rejected' ? assetResult.reason : new Error('Failed to create attachment');
+    throw err;
   }
 
-  // Both succeeded — link asset to attachment
-  await firestoreUpdateAttachment(userId, songId, attachment!.id, { assetId: asset!.id }).catch((err) => {
-    console.error('Failed to link asset to attachment:', err);
-  });
-  return { attachment: { ...attachment!, assetId: asset!.id }, assetId: asset!.id };
+  return { attachment, assetId: asset.id };
 }
 
 export function useAttachments(songId: string | null, onError?: (message: string) => void) {
@@ -143,7 +129,7 @@ export function useAttachments(songId: string | null, onError?: (message: string
     };
   }, [songId, isGuest, userId, authState]);
 
-  const addRichText = useCallback((content?: object): Attachment => {
+  const addRichText = useCallback(async (content?: object): Promise<Attachment> => {
     if (!songId) throw new Error('No song selected');
 
     const richContent = content || { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -175,7 +161,8 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return attachment;
     }
 
-    // Firestore: create attachment + asset in parallel
+    if (!userId) throw new Error('Not authenticated');
+
     const input: AttachmentInput = {
       type: 'richtext',
       order: attachments.length,
@@ -183,21 +170,14 @@ export function useAttachments(songId: string | null, onError?: (message: string
       content: richContent,
     };
 
-    const tempId = generateId();
-    const now = new Date().toISOString();
-    const tempAttachment: Attachment = { ...input, id: tempId, createdAt: now, updatedAt: now };
-    setAttachments(prev => [...prev, tempAttachment]);
-
-    if (userId) {
-      createLinkedAttachmentAndAsset(userId, songId, input, assetInput).then(({ attachment }) => {
-        setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
-      }).catch(() => {
-        setAttachments(prev => prev.filter(a => a.id !== tempId));
-        onErrorRef.current?.("Can't save — check your internet connection.");
-      });
+    try {
+      const { attachment } = await createLinkedAttachmentAndAsset(userId, songId, input, assetInput);
+      setAttachments(prev => [...prev, attachment]);
+      return attachment;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      throw new Error('Failed to create rich text');
     }
-
-    return tempAttachment;
   }, [songId, attachments.length, isGuest, userId]);
 
   const addImage = useCallback(async (input: AttachmentInput): Promise<Attachment> => {
@@ -235,35 +215,26 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return attachment;
     }
 
-    // Optimistic create
-    const tempId = generateId();
-    const now = new Date().toISOString();
-    const tempAttachment: Attachment = { ...input, id: tempId, createdAt: now, updatedAt: now };
-    setAttachments(prev => [...prev, tempAttachment]);
+    if (!userId) throw new Error('Not authenticated');
 
-    if (userId) {
-      try {
-        if (assetInput) {
-          const { attachment } = await createLinkedAttachmentAndAsset(userId, songId, input, assetInput);
-          setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
-          return attachment;
-        } else {
-          const attachment = await firestoreCreateAttachment(userId, songId, input);
-          setAttachments(prev => prev.map(a => a.id === tempId ? attachment : a));
-          return attachment;
-        }
-      } catch (err) {
-        console.error('addImage failed:', err);
-        setAttachments(prev => prev.filter(a => a.id !== tempId));
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        throw new Error('Upload failed');
+    try {
+      if (assetInput) {
+        const { attachment } = await createLinkedAttachmentAndAsset(userId, songId, input, assetInput);
+        setAttachments(prev => [...prev, attachment]);
+        return attachment;
+      } else {
+        const attachment = await firestoreCreateAttachment(userId, songId, input);
+        setAttachments(prev => [...prev, attachment]);
+        return attachment;
       }
+    } catch (err) {
+      console.error('addImage failed:', err);
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      throw new Error('Upload failed');
     }
-
-    return tempAttachment;
   }, [songId, isGuest, userId]);
 
-  const updateAttachment = useCallback((attachmentId: string, update: AttachmentUpdate) => {
+  const updateAttachment = useCallback(async (attachmentId: string, update: AttachmentUpdate): Promise<void> => {
     if (!songId) return;
 
     if (isGuest) {
@@ -272,48 +243,48 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return;
     }
 
-    // Optimistic update
-    setAttachments(prev => prev.map(a =>
-      a.id === attachmentId ? { ...a, ...update, updatedAt: new Date().toISOString() } : a
-    ));
+    if (!userId) return;
 
-    if (userId) {
-      firestoreUpdateAttachment(userId, songId, attachmentId, update).catch((err) => {
-        console.error('Attachment update failed:', err);
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
-      });
+    try {
+      await firestoreUpdateAttachment(userId, songId, attachmentId, update);
+      setAttachments(prev => prev.map(a =>
+        a.id === attachmentId ? { ...a, ...update, updatedAt: new Date().toISOString() } : a
+      ));
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
     }
   }, [songId, isGuest, userId]);
 
   /** Update the linked Asset's storage fields after file upload, and set runtime storageUrl on the attachment */
-  const updateAssetStorage = useCallback((attachmentId: string, storageUrl: string, storagePath: string) => {
+  const updateAssetStorage = useCallback(async (attachmentId: string, storageUrl: string, storagePath: string): Promise<void> => {
     if (!songId) return;
-
-    // Set runtime storageUrl on the in-memory attachment
-    setAttachments(prev => prev.map(a =>
-      a.id === attachmentId ? { ...a, storageUrl, updatedAt: new Date().toISOString() } : a
-    ));
 
     const att = attachments.find(a => a.id === attachmentId);
     if (!att?.assetId) return;
 
     if (isGuest) {
       storage.updateAsset(att.assetId, { storageUrl, storagePath });
+      setAttachments(prev => prev.map(a =>
+        a.id === attachmentId ? { ...a, storageUrl, updatedAt: new Date().toISOString() } : a
+      ));
       return;
     }
 
-    if (userId) {
-      firestoreUpdateAsset(userId, att.assetId, { storageUrl, storagePath }).catch((err) => {
-        console.error('Asset storage update failed:', err);
-      });
-    }
+    if (!userId) return;
 
-    // Update offline cache
-    downloadAndCache(attachmentId, storageUrl).catch(() => {});
+    try {
+      await firestoreUpdateAsset(userId, att.assetId, { storageUrl, storagePath });
+      setAttachments(prev => prev.map(a =>
+        a.id === attachmentId ? { ...a, storageUrl, updatedAt: new Date().toISOString() } : a
+      ));
+      // Update offline cache
+      downloadAndCache(attachmentId, storageUrl).catch(() => {});
+    } catch {
+      console.error('Asset storage update failed');
+    }
   }, [songId, isGuest, userId, attachments]);
 
-  const deleteAttachment = useCallback((attachmentId: string) => {
+  const deleteAttachment = useCallback(async (attachmentId: string): Promise<void> => {
     if (!songId) return;
 
     const deleted = attachments.find(a => a.id === attachmentId);
@@ -330,41 +301,33 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return;
     }
 
-    // Optimistic delete + promote default
-    setAttachments(prev => {
-      const after = prev.filter(a => a.id !== attachmentId);
-      if (needsNewDefault && after.length > 0) {
-        return after.map((a, i) => i === 0 ? { ...a, isDefault: true, updatedAt: new Date().toISOString() } : a);
-      }
-      return after;
-    });
+    if (!userId) return;
 
-    if (userId) {
+    try {
       // Delete file from Storage if it has a binary asset
       if (deleted?.assetId && ['image', 'pdf', 'audio'].includes(deleted.type)) {
         deleteAttachmentFile(userId, songId, attachmentId).catch(() => {});
       }
-      const deletePromise = firestoreDeleteAttachment(userId, songId, attachmentId);
+      await firestoreDeleteAttachment(userId, songId, attachmentId);
       if (needsNewDefault) {
-        deletePromise.then(() =>
-          firestoreUpdateAttachment(userId, songId, remaining[0].id, { isDefault: true })
-        ).catch(() => {
-          onErrorRef.current?.("Can't save — check your internet connection.");
-          firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
-        });
-      } else {
-        deletePromise.catch(() => {
-          onErrorRef.current?.("Can't save — check your internet connection.");
-          firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
-        });
+        await firestoreUpdateAttachment(userId, songId, remaining[0].id, { isDefault: true });
       }
+      setAttachments(prev => {
+        const after = prev.filter(a => a.id !== attachmentId);
+        if (needsNewDefault && after.length > 0) {
+          return after.map((a, i) => i === 0 ? { ...a, isDefault: true, updatedAt: new Date().toISOString() } : a);
+        }
+        return after;
+      });
+    } catch {
+      onErrorRef.current?.("Can't delete — check your internet connection.");
     }
 
     // Remove from offline cache
     removeCachedBlob(attachmentId).catch(() => {});
   }, [songId, attachments, isGuest, userId]);
 
-  const deleteAllAttachments = useCallback(() => {
+  const deleteAllAttachments = useCallback(async (): Promise<void> => {
     if (!songId) return;
 
     // Remove all cached blobs for this song's attachments
@@ -380,17 +343,17 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return;
     }
 
-    setAttachments([]);
+    if (!userId) return;
 
-    if (userId) {
-      firestoreDeleteAllAttachments(userId, songId).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
-      });
+    try {
+      await firestoreDeleteAllAttachments(userId, songId);
+      setAttachments([]);
+    } catch {
+      onErrorRef.current?.("Can't delete — check your internet connection.");
     }
   }, [songId, attachments, isGuest, userId]);
 
-  const reorderAttachments = useCallback((orderedIds: string[]) => {
+  const reorderAttachments = useCallback(async (orderedIds: string[]): Promise<void> => {
     if (!songId) return;
 
     if (isGuest) {
@@ -399,28 +362,27 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return;
     }
 
-    // Optimistic reorder
-    const now = new Date().toISOString();
-    setAttachments(prev => {
-      const map = new Map(prev.map(a => [a.id, a]));
-      return orderedIds
-        .map((id, index) => {
-          const att = map.get(id);
-          if (!att) return null;
-          return { ...att, order: index, updatedAt: now };
-        })
-        .filter((a): a is Attachment => a !== null);
-    });
+    if (!userId) return;
 
-    if (userId) {
-      firestoreReorderAttachments(userId, songId, orderedIds).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
+    try {
+      await firestoreReorderAttachments(userId, songId, orderedIds);
+      const now = new Date().toISOString();
+      setAttachments(prev => {
+        const map = new Map(prev.map(a => [a.id, a]));
+        return orderedIds
+          .map((id, index) => {
+            const att = map.get(id);
+            if (!att) return null;
+            return { ...att, order: index, updatedAt: now };
+          })
+          .filter((a): a is Attachment => a !== null);
       });
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
     }
   }, [songId, isGuest, userId]);
 
-  const setDefault = useCallback((attachmentId: string) => {
+  const setDefault = useCallback(async (attachmentId: string): Promise<void> => {
     if (!songId) return;
 
     if (isGuest) {
@@ -436,22 +398,21 @@ export function useAttachments(songId: string | null, onError?: (message: string
       return;
     }
 
-    // Optimistic: update all in state
-    setAttachments(prev => prev.map(a => ({
-      ...a,
-      isDefault: a.id === attachmentId,
-      updatedAt: new Date().toISOString(),
-    })));
+    if (!userId) return;
 
-    if (userId) {
+    try {
       // Update all attachments' isDefault in Firestore
       const updates = attachments.map(a =>
         firestoreUpdateAttachment(userId, songId, a.id, { isDefault: a.id === attachmentId })
       );
-      Promise.all(updates).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetAttachments(userId, songId).then(setAttachments).catch(() => {});
-      });
+      await Promise.all(updates);
+      setAttachments(prev => prev.map(a => ({
+        ...a,
+        isDefault: a.id === attachmentId,
+        updatedAt: new Date().toISOString(),
+      })));
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
     }
   }, [songId, attachments, isGuest, userId]);
 

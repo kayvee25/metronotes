@@ -463,16 +463,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     }
   }, []);
 
-  const handleAnnotationSave = useCallback((annotations: AnnotationLayer) => {
+  const handleAnnotationSave = useCallback(async (annotations: AnnotationLayer) => {
     if (annotatingAttachment) {
-      updateAttachment(annotatingAttachment.id, { annotations });
+      await updateAttachment(annotatingAttachment.id, { annotations });
     }
     setAnnotatingAttachment(null);
   }, [annotatingAttachment, updateAttachment]);
 
-  const handlePdfAnnotationSave = useCallback((pageAnnotations: Record<number, AnnotationLayer>) => {
+  const handlePdfAnnotationSave = useCallback(async (pageAnnotations: Record<number, AnnotationLayer>) => {
     if (annotatingPdf) {
-      updateAttachment(annotatingPdf.id, { pageAnnotations });
+      await updateAttachment(annotatingPdf.id, { pageAnnotations });
     }
     setAnnotatingPdf(null);
   }, [annotatingPdf, updateAttachment]);
@@ -482,12 +482,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     setEditingAttachment({ id: '', type: 'richtext', order: 0, isDefault: false, createdAt: '', updatedAt: '' });
   }, []);
 
-  const handleEditorSave = useCallback((content: object) => {
+  const handleEditorSave = useCallback(async (content: object) => {
     if (isNewAttachment) {
       // Create the attachment with content (no orphan on cancel)
-      addRichText(content);
+      await addRichText(content);
     } else if (editingAttachment) {
-      updateAttachment(editingAttachment.id, { content });
+      await updateAttachment(editingAttachment.id, { content });
     }
     setEditingAttachment(null);
     setIsNewAttachment(false);
@@ -505,16 +505,16 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     setEditingDrawing({ id: '', type: 'drawing', order: 0, isDefault: false, createdAt: '', updatedAt: '' });
   }, []);
 
-  const handleDrawingSave = useCallback((data: DrawingData) => {
+  const handleDrawingSave = useCallback(async (data: DrawingData) => {
     if (isNewDrawing) {
-      addImage({
+      await addImage({
         type: 'drawing',
         order: attachments.length,
         isDefault: attachments.length === 0,
         drawingData: data,
       });
     } else if (editingDrawing) {
-      updateAttachment(editingDrawing.id, { drawingData: data });
+      await updateAttachment(editingDrawing.id, { drawingData: data });
     }
     setEditingDrawing(null);
     setIsNewDrawing(false);

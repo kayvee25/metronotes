@@ -43,7 +43,7 @@ interface SetlistLibraryProps {
 
 export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlistId, onInitialViewConsumed }: SetlistLibraryProps) {
   const { toast } = useToast();
-  const { setlists, isLoading, error, createSetlist, updateSetlist, deleteSetlist, refresh } = useSetlists(toast);
+  const { setlists, isLoading, error, createSetlist, updateSetlist, deleteSetlist, removeSongFromSetlist, reorderSongs, refresh } = useSetlists(toast);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingSetlist, setEditingSetlist] = useState<Setlist | null>(null);
@@ -99,15 +99,15 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
     } catch {}
   };
 
-  const handleCreateSetlist = (data: SetlistInput) => {
-    const newSetlist = createSetlist(data);
+  const handleCreateSetlist = async (data: SetlistInput) => {
+    const newSetlist = await createSetlist(data);
     setShowForm(false);
-    setViewingSetlist(newSetlist);
+    if (newSetlist) setViewingSetlist(newSetlist);
   };
 
-  const handleUpdateSetlist = (data: SetlistInput) => {
+  const handleUpdateSetlist = async (data: SetlistInput) => {
     if (editingSetlist) {
-      updateSetlist(editingSetlist.id, data);
+      await updateSetlist(editingSetlist.id, data);
       setEditingSetlist(null);
     }
   };
@@ -121,7 +121,7 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
       confirmLabel: 'Delete',
       variant: 'danger',
     });
-    if (ok) deleteSetlist(setlist.id);
+    if (ok) await deleteSetlist(setlist.id);
   };
 
   const getTotalDuration = (setlist: Setlist) => {
@@ -150,6 +150,9 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
         songs={songs}
         onBack={() => setViewingSetlist(null)}
         onPlay={onPlaySetlist}
+        updateSetlist={updateSetlist}
+        removeSongFromSetlist={removeSongFromSetlist}
+        reorderSongs={reorderSongs}
       />
     );
   }

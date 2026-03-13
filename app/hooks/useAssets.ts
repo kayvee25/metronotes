@@ -10,14 +10,13 @@ import {
   firestoreUpdateAsset,
   firestoreDeleteAsset,
 } from '../lib/firestore';
-import { generateId, getTimestamp } from '../lib/utils';
 
 export interface UseAssetsReturn {
   assets: Asset[];
   isLoading: boolean;
-  createAsset: (input: AssetInput) => Asset | null;
-  updateAsset: (id: string, update: AssetUpdate) => void;
-  deleteAsset: (id: string) => void;
+  createAsset: (input: AssetInput) => Promise<Asset | null>;
+  updateAsset: (id: string, update: AssetUpdate) => Promise<void>;
+  deleteAsset: (id: string) => Promise<void>;
   getAssetById: (id: string) => Asset | undefined;
   refresh: () => void;
 }
@@ -55,71 +54,61 @@ export function useAssets(onError?: (message: string) => void): UseAssetsReturn 
     }
   }, [authState, load]);
 
-  const createAsset = useCallback((input: AssetInput): Asset | null => {
-    const id = generateId();
-    const now = getTimestamp();
-    const asset: Asset = { ...input, id, createdAt: now, updatedAt: now };
-
+  const createAsset = useCallback(async (input: AssetInput): Promise<Asset | null> => {
     if (isGuest) {
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const asset: Asset = { ...input, id, createdAt: now, updatedAt: now };
       storage.createAsset(asset);
       setAssets(storage.getAssets());
       return asset;
     }
 
-    // Optimistic create
-    setAssets(prev => [...prev, asset]);
+    if (!userId) return null;
 
-    if (userId) {
-      firestoreCreateAsset(userId, input).then((created) => {
-        setAssets(prev => prev.map(a => a.id === id ? created : a));
-      }).catch(() => {
-        setAssets(prev => prev.filter(a => a.id !== id));
-        onErrorRef.current?.("Can't save — check your internet connection.");
-      });
+    try {
+      const asset = await firestoreCreateAsset(userId, input);
+      setAssets(prev => [...prev, asset]);
+      return asset;
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
+      return null;
     }
-
-    return asset;
   }, [isGuest, userId]);
 
-  const updateAsset = useCallback((id: string, update: AssetUpdate) => {
+  const updateAsset = useCallback(async (id: string, update: AssetUpdate): Promise<void> => {
     if (isGuest) {
       storage.updateAsset(id, update);
       setAssets(storage.getAssets());
       return;
     }
 
-    // Optimistic update
-    setAssets(prev => prev.map(a =>
-      a.id === id ? { ...a, ...update, updatedAt: getTimestamp() } : a
-    ));
+    if (!userId) return;
 
-    if (userId) {
-      firestoreUpdateAsset(userId, id, update).catch(() => {
-        onErrorRef.current?.("Can't save — check your internet connection.");
-        firestoreGetAssets(userId).then(setAssets).catch(() => {});
-      });
+    try {
+      await firestoreUpdateAsset(userId, id, update);
+      setAssets(prev => prev.map(a =>
+        a.id === id ? { ...a, ...update, updatedAt: new Date().toISOString() } : a
+      ));
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
     }
   }, [isGuest, userId]);
 
-  const deleteAsset = useCallback((id: string) => {
+  const deleteAsset = useCallback(async (id: string): Promise<void> => {
     if (isGuest) {
       storage.deleteAsset(id);
       setAssets(storage.getAssets());
       return;
     }
 
-    // Capture pre-delete state for rollback
-    let previous: Asset[] = [];
-    setAssets(prev => {
-      previous = prev;
-      return prev.filter(a => a.id !== id);
-    });
+    if (!userId) return;
 
-    if (userId) {
-      firestoreDeleteAsset(userId, id).catch(() => {
-        setAssets(previous);
-        onErrorRef.current?.("Can't save — check your internet connection.");
-      });
+    try {
+      await firestoreDeleteAsset(userId, id);
+      setAssets(prev => prev.filter(a => a.id !== id));
+    } catch {
+      onErrorRef.current?.("Can't save — check your internet connection.");
     }
   }, [isGuest, userId]);
 

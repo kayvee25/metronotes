@@ -23,7 +23,7 @@ import { uploadAttachmentFile, getStoragePath } from './storage-firebase';
 // an array of arrays. Convert to/from {x,y,p} objects only on known stroke fields.
 
 /** Convert stroke points for Firestore write: [x,y,p] → {x,y,p} */
-function transformStrokesForWrite(strokes: unknown[]): unknown[] {
+export function transformStrokesForWrite(strokes: unknown[]): unknown[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return strokes.map((stroke: any) => ({
     ...stroke,
@@ -33,7 +33,7 @@ function transformStrokesForWrite(strokes: unknown[]): unknown[] {
 
 /** Convert stroke points on Firestore read: {x,y,p} → [x,y,p].
  * Also handles pre-migration data that's already in [x,y,p] array format. */
-function transformStrokesForRead(strokes: unknown[]): unknown[] {
+export function transformStrokesForRead(strokes: unknown[]): unknown[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return strokes.map((stroke: any) => ({
     ...stroke,
@@ -47,7 +47,7 @@ function transformStrokesForRead(strokes: unknown[]): unknown[] {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Apply stroke transforms to known fields before Firestore write */
-function prepareForFirestoreWrite(data: Record<string, unknown>): Record<string, unknown> {
+export function prepareForFirestoreWrite(data: Record<string, unknown>): Record<string, unknown> {
   const result = { ...data };
   if (result.drawingData && typeof result.drawingData === 'object') {
     const dd = result.drawingData as any;
@@ -69,7 +69,7 @@ function prepareForFirestoreWrite(data: Record<string, unknown>): Record<string,
 }
 
 /** Restore stroke points from Firestore read data */
-function restoreFromFirestoreRead(data: Record<string, unknown>): Record<string, unknown> {
+export function restoreFromFirestoreRead(data: Record<string, unknown>): Record<string, unknown> {
   const result = { ...data };
   if (result.drawingData && typeof result.drawingData === 'object') {
     const dd = result.drawingData as any;
@@ -92,7 +92,7 @@ function restoreFromFirestoreRead(data: Record<string, unknown>): Record<string,
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Deep-strip undefined values — Firestore rejects them at any depth
-function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+export function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value === undefined) continue;

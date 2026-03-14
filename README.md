@@ -1,5 +1,7 @@
 # MetroNotes
 
+![CI](https://github.com/kayvee25/metronotes/actions/workflows/ci.yml/badge.svg)
+
 > **Potential rebrand:** **GigKit** — "Your gig, in your pocket"
 
 A mobile-first PWA for musicians to manage songs, setlists, and a metronome — all in one place. Built for use on stage, at rehearsals, and during practice.

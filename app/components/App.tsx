@@ -642,12 +642,14 @@ function AppInner() {
         <div className="flex gap-3">
           <button
             onClick={handleDiscardChanges}
+            data-testid="btn-discard-changes"
             className="flex-1 h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
           >
             Discard
           </button>
           <button
             onClick={handleSaveAndNavigate}
+            data-testid="btn-save-changes"
             className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
           >
             Save

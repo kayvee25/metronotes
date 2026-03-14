@@ -161,6 +161,7 @@ export default function LibraryTab({
             disabled={isSyncing}
             className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
             aria-label="Sync now"
+            data-testid="btn-sync"
           >
             <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 4m16 16l-1.64-1.64A9 9 0 014.51 15" />
@@ -176,6 +177,7 @@ export default function LibraryTab({
           <button
             key={tab.id}
             onClick={() => handleSubTabChange(tab.id)}
+            data-testid={`tab-${tab.id}`}
             className={`flex-1 py-3 text-sm font-medium text-center transition-colors relative ${
               activeSubTab === tab.id
                 ? 'text-[var(--accent)]'

@@ -367,6 +367,7 @@ export default function LiveTab({
         <button
           onClick={() => setShowStartForm(true)}
           disabled={isGuest}
+          data-testid="btn-start-session"
           className="w-full py-3 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Start Session
@@ -386,6 +387,7 @@ export default function LiveTab({
 
         <button
           onClick={() => setMode('joining')}
+          data-testid="btn-join-session"
           className="w-full py-3 rounded-xl border border-[var(--border)] text-[var(--foreground)] font-semibold hover:bg-[var(--surface)] active:scale-95 transition-all"
         >
           Join Session

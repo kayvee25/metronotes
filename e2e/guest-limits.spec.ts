@@ -13,10 +13,10 @@ test.describe('Guest mode limits', () => {
     }
 
     // Try to create 4th song
-    await page.getByRole('button', { name: 'Add song' }).click();
+    await page.getByTestId('btn-add-song').click();
     await page.waitForTimeout(300);
-    await page.getByPlaceholder('Song name').fill('Over Limit');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await page.getByTestId('input-song-name').fill('Over Limit');
+    await page.getByTestId('btn-create-song').click();
     await page.waitForTimeout(1000);
 
     // Should see error about guest limit — check for toast or error text

@@ -180,6 +180,7 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search setlists..."
+            data-testid="input-search-setlists"
             className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
@@ -275,9 +276,9 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
                   },
                 ]}
               >
-                <div className="w-full flex items-center justify-between px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer">
+                <div data-testid="setlist-item" className="w-full flex items-center justify-between px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer">
                   <h3 className="font-semibold text-[var(--foreground)]">{setlist.name}</h3>
-                  <span className="text-sm text-[var(--muted)] flex-shrink-0">{getTotalDuration(setlist)}</span>
+                  <span data-testid="setlist-song-count" className="text-sm text-[var(--muted)] flex-shrink-0">{getTotalDuration(setlist)}</span>
                 </div>
               </LongPressMenu>
             ))}
@@ -288,6 +289,7 @@ export default function SetlistLibrary({ songs, onPlaySetlist, initialViewSetlis
       {/* FAB */}
       <button
         onClick={() => setShowForm(true)}
+        data-testid="btn-add-setlist"
         className="fixed bottom-[80px] right-4 w-14 h-14 rounded-2xl bg-[var(--accent)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
         aria-label="Add setlist"
       >

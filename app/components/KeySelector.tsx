@@ -16,6 +16,7 @@ export default function KeySelector({ value, onChange, className = '', compact =
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          data-testid="select-key"
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         >
           <option value="">-</option>
@@ -39,6 +40,7 @@ export default function KeySelector({ value, onChange, className = '', compact =
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      data-testid="select-key"
       className={`px-4 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)] cursor-pointer ${className}`}
     >
       <option value="">Key not set</option>

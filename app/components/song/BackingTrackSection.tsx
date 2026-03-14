@@ -78,7 +78,7 @@ export default function BackingTrackSection({
 
   return (
     <div className="px-4 py-3 border-t border-[var(--border)]">
-      <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
+      <label data-testid="section-audio" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
         Audio
       </label>
 
@@ -118,6 +118,7 @@ export default function BackingTrackSection({
       {/* Add audio button — always visible */}
       {!isUploading && (
         <button
+          data-testid="btn-add-audio"
           onClick={() => setShowAddMenu(true)}
           className={`w-full py-3 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--muted)] font-medium text-sm hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2 ${audioAttachments.length > 0 ? 'mt-2' : ''}`}
         >

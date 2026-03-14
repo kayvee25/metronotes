@@ -7,42 +7,42 @@ test.describe('Navigation (authenticated)', () => {
   });
 
   test('bottom nav tabs switch views', async ({ page }) => {
-    // Should start on Library
-    await expect(page.getByRole('button', { name: 'Songs', exact: true })).toBeVisible();
+    // Should start on Library — sub-tab "Songs" visible
+    await expect(page.getByTestId('tab-songs')).toBeVisible();
 
     // Click Live tab
-    await page.getByRole('button', { name: 'Live' }).click();
+    await page.getByTestId('nav-live').click();
     await page.waitForTimeout(300);
     await expect(page.getByRole('heading', { name: 'Live Session' })).toBeVisible();
 
     // Click Settings tab
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByTestId('nav-settings').click();
     await page.waitForTimeout(300);
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
     // Click Library tab
-    await page.getByRole('button', { name: 'Library' }).click();
+    await page.getByTestId('nav-library').click();
     await page.waitForTimeout(300);
-    await expect(page.getByRole('button', { name: 'Songs', exact: true })).toBeVisible();
+    await expect(page.getByTestId('tab-songs')).toBeVisible();
   });
 
   test('library sub-tabs: Songs, Setlists, Files', async ({ page }) => {
     // Default is Songs
-    await expect(page.getByPlaceholder('Search songs...')).toBeVisible();
+    await expect(page.getByTestId('input-search-songs')).toBeVisible();
 
     // Switch to Setlists
-    await page.getByRole('button', { name: 'Setlists', exact: true }).click();
+    await page.getByTestId('tab-setlists').click();
     await page.waitForTimeout(300);
-    await expect(page.getByPlaceholder('Search setlists...')).toBeVisible();
+    await expect(page.getByTestId('input-search-setlists')).toBeVisible();
 
     // Switch to Files
-    await page.getByRole('button', { name: 'Files', exact: true }).click();
+    await page.getByTestId('tab-files').click();
     await page.waitForTimeout(300);
 
     // Switch back to Songs
-    await page.getByRole('button', { name: 'Songs', exact: true }).click();
+    await page.getByTestId('tab-songs').click();
     await page.waitForTimeout(300);
-    await expect(page.getByPlaceholder('Search songs...')).toBeVisible();
+    await expect(page.getByTestId('input-search-songs')).toBeVisible();
   });
 
   test('song view back button returns to library', async ({ page }) => {
@@ -50,7 +50,7 @@ test.describe('Navigation (authenticated)', () => {
     await createSong(page, songName);
 
     // Should be in song view
-    await expect(page.getByLabel('Back')).toBeVisible();
+    await expect(page.getByTestId('btn-back')).toBeVisible();
 
     // Click back
     await goBackToLibrary(page);
@@ -64,15 +64,15 @@ test.describe('Navigation (authenticated)', () => {
     await createSong(page, songName);
 
     // Make a change — edit BPM
-    await page.getByLabel('Increase BPM').click();
+    await page.getByTestId('btn-increase-bpm').click();
     await page.waitForTimeout(300);
 
     // Click back
-    await page.getByLabel('Back').first().click();
+    await page.getByTestId('btn-back').click();
     await page.waitForTimeout(500);
 
     // Should see unsaved changes dialog with Discard/Save options
-    const discardBtn = page.getByRole('button', { name: 'Discard' });
+    const discardBtn = page.getByTestId('btn-discard-changes');
 
     const dialogVisible = await discardBtn.isVisible({ timeout: 2000 }).catch(() => false);
     if (dialogVisible) {
@@ -82,22 +82,22 @@ test.describe('Navigation (authenticated)', () => {
     }
 
     // Should be back at library
-    await expect(page.getByText('Library')).toBeVisible();
+    await expect(page.getByTestId('nav-library')).toBeVisible();
   });
 
   test('Live tab shows session options', async ({ page }) => {
-    await page.getByRole('button', { name: 'Live' }).click();
+    await page.getByTestId('nav-live').click();
     await page.waitForTimeout(300);
 
     // Should see Start Session and Join Session buttons
-    await expect(page.getByRole('button', { name: 'Start Session' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Join Session' })).toBeVisible();
+    await expect(page.getByTestId('btn-start-session')).toBeVisible();
+    await expect(page.getByTestId('btn-join-session')).toBeVisible();
     await expect(page.getByText('Play together in sync with your band')).toBeVisible();
   });
 
   test('sync button triggers refresh', async ({ page }) => {
-    // Click Sync now button
-    const syncBtn = page.getByRole('button', { name: 'Sync now' });
+    // Click Sync button
+    const syncBtn = page.getByTestId('btn-sync');
     await expect(syncBtn).toBeVisible();
     await syncBtn.click();
     await page.waitForTimeout(1000);

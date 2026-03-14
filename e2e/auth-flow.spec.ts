@@ -5,11 +5,11 @@ test.describe('Auth flow', () => {
   test('email sign-in redirects to authenticated app', async ({ page }) => {
     await loginWithTestAccount(page);
 
-    // Should see the library tab
-    await expect(page.getByText('Library')).toBeVisible();
+    // Should see the library nav tab
+    await expect(page.getByTestId('nav-library')).toBeVisible();
 
     // Should NOT see the auth screen buttons
-    await expect(page.getByRole('button', { name: 'Continue as Guest' })).not.toBeVisible();
+    await expect(page.getByTestId('btn-guest')).not.toBeVisible();
   });
 
   test('sign out redirects to auth screen', async ({ page }) => {
@@ -17,22 +17,21 @@ test.describe('Auth flow', () => {
     await navigateToSettings(page);
 
     // Click sign out
-    await page.getByRole('button', { name: 'Sign Out' }).click();
+    await page.getByTestId('btn-sign-out').click();
     await page.waitForTimeout(300);
 
     // Confirm sign out dialog
-    const confirmButton = page.getByRole('button', { name: 'Sign Out' }).last();
-    await confirmButton.click();
+    await page.getByTestId('btn-confirm-ok').click();
     await page.waitForTimeout(1000);
 
     // Should see auth screen
-    await expect(page.getByRole('button', { name: 'Continue as Guest' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('btn-guest')).toBeVisible({ timeout: 5000 });
   });
 
   test('guest mode shows library without sign in', async ({ page }) => {
     await loginAsGuest(page);
 
-    // Should see the library tab
-    await expect(page.getByText('Library')).toBeVisible();
+    // Should see the library nav tab
+    await expect(page.getByTestId('nav-library')).toBeVisible();
   });
 });

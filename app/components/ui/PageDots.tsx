@@ -38,6 +38,7 @@ export default function PageDots({ count, current, onDotClick }: PageDotsProps) 
               : 'w-2 h-2 bg-[var(--muted)] opacity-50 hover:opacity-75'
           }`}
           aria-label={`Page ${i + 1}${i === current ? ' (current)' : ''}`}
+          data-testid={`page-indicator-${i + 1}`}
         />
       ))}
     </div>

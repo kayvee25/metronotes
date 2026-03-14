@@ -9,23 +9,23 @@ import { getCacheSize, clearAllCache } from '../lib/offline-cache';
 import { useToast } from './ui/Toast';
 import { getProvider } from '../lib/cloud-providers';
 
-const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
-  { value: 'sm', label: 'Small' },
-  { value: 'md', label: 'Medium' },
-  { value: 'lg', label: 'Large' },
-  { value: 'xl', label: 'Extra Large' },
+const FONT_SIZE_OPTIONS: { value: FontSize; label: string; testId: string }[] = [
+  { value: 'sm', label: 'Small', testId: 'font-size-small' },
+  { value: 'md', label: 'Medium', testId: 'font-size-medium' },
+  { value: 'lg', label: 'Large', testId: 'font-size-large' },
+  { value: 'xl', label: 'Extra Large', testId: 'font-size-xl' },
 ];
 
-const FONT_FAMILY_OPTIONS: { value: FontFamily; label: string }[] = [
-  { value: 'mono', label: 'Monospace' },
-  { value: 'sans', label: 'Sans-serif' },
-  { value: 'serif', label: 'Serif' },
+const FONT_FAMILY_OPTIONS: { value: FontFamily; label: string; testId: string }[] = [
+  { value: 'mono', label: 'Monospace', testId: 'font-family-monospace' },
+  { value: 'sans', label: 'Sans-serif', testId: 'font-family-sans-serif' },
+  { value: 'serif', label: 'Serif', testId: 'font-family-serif' },
 ];
 
-const SOUND_OPTIONS: { value: MetronomeSound; label: string }[] = [
-  { value: 'default', label: 'Default Click' },
-  { value: 'wood', label: 'Wood Block' },
-  { value: 'cowbell', label: 'Cowbell' },
+const SOUND_OPTIONS: { value: MetronomeSound; label: string; testId: string }[] = [
+  { value: 'default', label: 'Default Click', testId: 'sound-default' },
+  { value: 'wood', label: 'Wood Block', testId: 'sound-wood' },
+  { value: 'cowbell', label: 'Cowbell', testId: 'sound-cowbell' },
 ];
 
 interface SettingsProps {
@@ -41,7 +41,7 @@ interface SettingsProps {
   onKeepScreenOnChange: (v: boolean) => void;
 }
 
-function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () => void; label: string }) {
+function Toggle({ enabled, onToggle, label, testId }: { enabled: boolean; onToggle: () => void; label: string; testId?: string }) {
   return (
     <button
       onClick={onToggle}
@@ -49,6 +49,7 @@ function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () =
         enabled ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
       }`}
       aria-label={label}
+      data-testid={testId}
     >
       <div
         className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
@@ -64,7 +65,7 @@ function SegmentedControl<T extends string>({
   value,
   onChange,
 }: {
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; testId?: string }[];
   value: T;
   onChange: (v: T) => void;
 }) {
@@ -74,6 +75,7 @@ function SegmentedControl<T extends string>({
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
+          data-testid={opt.testId}
           className={`flex-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors ${
             value === opt.value
               ? 'bg-[var(--accent)] text-white'
@@ -145,7 +147,7 @@ export default function Settings({
   return (
     <div className="flex flex-col h-full max-w-2xl mx-auto w-full">
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] min-h-[64px]">
-        <h1 className="text-xl font-bold text-[var(--foreground)]">Settings</h1>
+        <h1 className="text-xl font-bold text-[var(--foreground)]" data-testid="settings-heading">Settings</h1>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-20 space-y-4">
@@ -196,6 +198,7 @@ export default function Settings({
               )}
               <button
                 onClick={handleSignOut}
+                data-testid="btn-sign-out"
                 className="flex-1 h-11 rounded-xl bg-[var(--accent-danger)] text-white font-semibold hover:brightness-110 active:scale-95 transition-all text-sm"
               >
                 Sign Out
@@ -206,7 +209,7 @@ export default function Settings({
 
         {/* Performance Font */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-4">
-          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Performance Font</p>
+          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider" data-testid="section-font">Performance Font</p>
 
           <div>
             <p className="text-sm text-[var(--foreground)] mb-2">Size</p>
@@ -221,7 +224,7 @@ export default function Settings({
 
         {/* Metronome */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-4">
-          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Metronome</p>
+          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider" data-testid="section-metronome">Metronome</p>
 
           <div>
             <p className="text-sm text-[var(--foreground)] mb-2">Sound</p>
@@ -232,14 +235,14 @@ export default function Settings({
 
         {/* Display */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-4">
-          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">Display</p>
+          <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider" data-testid="section-display">Display</p>
 
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[var(--foreground)] font-medium">Dark Mode</p>
               <p className="text-sm text-[var(--muted)]">Toggle dark appearance</p>
             </div>
-            <Toggle enabled={isDarkMode} onToggle={onToggleDarkMode} label="Toggle dark mode" />
+            <Toggle enabled={isDarkMode} onToggle={onToggleDarkMode} label="Toggle dark mode" testId="toggle-dark-mode" />
           </div>
 
           <div className="flex items-center justify-between">

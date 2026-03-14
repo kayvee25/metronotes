@@ -126,6 +126,7 @@ export default function AttachmentCard({
         onClick={onToggleDefault}
         className="flex-shrink-0 w-8 h-8 flex items-center justify-center"
         aria-label={attachment.isDefault ? 'Default attachment' : 'Set as default'}
+        data-testid={attachment.isDefault ? 'badge-default-attachment' : 'btn-set-default'}
       >
         <svg
           className={`w-4 h-4 ${attachment.isDefault ? 'text-[var(--accent)] fill-[var(--accent)]' : 'text-[var(--muted)]'}`}
@@ -141,6 +142,7 @@ export default function AttachmentCard({
       {/* Edit button — or Open in Drive for cloud-linked files */}
       {canEdit ? (
         <button
+          data-testid="btn-edit-attachment"
           onClick={onEdit}
           className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-[var(--background)] flex items-center justify-center"
           aria-label="Edit attachment"
@@ -153,6 +155,7 @@ export default function AttachmentCard({
 
       {/* Delete button */}
       <button
+        data-testid="btn-delete-attachment"
         onClick={onDelete}
         className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-[var(--accent-danger)]/10 flex items-center justify-center"
         aria-label="Delete attachment"

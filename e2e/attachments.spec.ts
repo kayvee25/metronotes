@@ -3,20 +3,20 @@ import { loginWithTestAccount, createSong } from './helpers';
 
 /** Helper to add a text attachment and close the editor */
 async function addTextAttachment(page: import('@playwright/test').Page) {
-  const addBtn = page.getByText('+ Add Attachment');
+  const addBtn = page.getByTestId('btn-add-attachment');
   await addBtn.scrollIntoViewIfNeeded();
   await addBtn.click();
   await page.waitForTimeout(500);
 
-  const textOption = page.getByRole('button', { name: 'Text', exact: true });
+  const textOption = page.getByTestId('attach-type-text');
   if (await textOption.isVisible({ timeout: 3000 }).catch(() => false)) {
     await textOption.click();
     await page.waitForTimeout(1000);
 
     // The editor overlay opens — type content and click Done
     // The editor is a contenteditable div inside the overlay
-    const cancelBtn = page.getByRole('button', { name: 'Cancel' });
-    const doneBtn = page.getByRole('button', { name: 'Done' });
+    const cancelBtn = page.getByTestId('btn-editor-cancel');
+    const doneBtn = page.getByTestId('btn-editor-done');
 
     if (await cancelBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Type content so Done becomes enabled
@@ -43,16 +43,16 @@ test.describe('Attachments (authenticated)', () => {
     await createSong(page, songName);
 
     // In edit mode, we should see the ATTACHMENTS section header
-    await expect(page.getByText('ATTACHMENTS').first()).toBeVisible();
+    await expect(page.getByTestId('section-attachments')).toBeVisible();
 
     // Should see AUDIO section
-    await expect(page.getByText('AUDIO').first()).toBeVisible();
+    await expect(page.getByTestId('section-audio')).toBeVisible();
 
     // Should see "+ Add Attachment" button
-    await expect(page.getByText('+ Add Attachment').first()).toBeVisible();
+    await expect(page.getByTestId('btn-add-attachment')).toBeVisible();
 
     // Should see "+ Add Audio" button
-    await expect(page.getByText('+ Add Audio').first()).toBeVisible();
+    await expect(page.getByTestId('btn-add-audio')).toBeVisible();
   });
 
   test('add text attachment via editor', async ({ page }) => {
@@ -60,29 +60,29 @@ test.describe('Attachments (authenticated)', () => {
     await createSong(page, songName);
 
     // Click Add Attachment
-    await page.getByText('+ Add Attachment').click();
+    await page.getByTestId('btn-add-attachment').click();
     await page.waitForTimeout(500);
 
     // Pick Text from the type picker
-    const textOption = page.getByRole('button', { name: 'Text', exact: true });
+    const textOption = page.getByTestId('attach-type-text');
     await expect(textOption).toBeVisible({ timeout: 3000 });
     await textOption.click();
     await page.waitForTimeout(1000);
 
     // The editor overlay should be visible with formatting tools
-    const cancelBtn = page.getByRole('button', { name: 'Cancel' });
+    const cancelBtn = page.getByTestId('btn-editor-cancel');
     await expect(cancelBtn).toBeVisible({ timeout: 3000 });
 
     // Type something and save
     await page.keyboard.type('Hello World');
     await page.waitForTimeout(500);
 
-    const doneBtn = page.getByRole('button', { name: 'Done' });
+    const doneBtn = page.getByTestId('btn-editor-done');
     await doneBtn.click();
     await page.waitForTimeout(1000);
 
     // Back in edit mode — the attachment should now exist in the list
-    await expect(page.getByText('ATTACHMENTS')).toBeVisible();
+    await expect(page.getByTestId('section-attachments')).toBeVisible();
   });
 
   test('delete attachment with confirmation', async ({ page }) => {
@@ -93,24 +93,24 @@ test.describe('Attachments (authenticated)', () => {
     await addTextAttachment(page);
 
     // Count attachments before delete
-    const beforeCount = await page.locator('[roledescription="sortable"]').count();
+    const beforeCount = await page.getByTestId('attachment-item').count();
 
     if (beforeCount > 0) {
       // Click delete on the last attachment
-      const deleteBtn = page.getByRole('button', { name: 'Delete attachment' }).last();
+      const deleteBtn = page.getByTestId('btn-delete-attachment').last();
       await deleteBtn.scrollIntoViewIfNeeded();
       await deleteBtn.click();
       await page.waitForTimeout(300);
 
       // Confirm deletion in the dialog
-      const confirmBtn = page.getByRole('button', { name: /[Dd]elete/ }).last();
+      const confirmBtn = page.getByTestId('btn-confirm-ok');
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await confirmBtn.click();
         await page.waitForTimeout(500);
       }
 
       // Count should have decreased
-      const afterCount = await page.locator('[roledescription="sortable"]').count();
+      const afterCount = await page.getByTestId('attachment-item').count();
       expect(afterCount).toBeLessThan(beforeCount);
     }
   });
@@ -123,14 +123,14 @@ test.describe('Attachments (authenticated)', () => {
     await addTextAttachment(page);
 
     // The "Set as default" button should be visible on the non-default attachment
-    const setDefaultBtn = page.getByRole('button', { name: 'Set as default' }).first();
+    const setDefaultBtn = page.getByTestId('btn-set-default').first();
     if (await setDefaultBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await setDefaultBtn.scrollIntoViewIfNeeded();
       await setDefaultBtn.click();
       await page.waitForTimeout(500);
 
       // After setting as default, should see "Default attachment" marker
-      await expect(page.getByRole('button', { name: 'Default attachment' })).toBeVisible();
+      await expect(page.getByTestId('badge-default-attachment')).toBeVisible();
     }
   });
 
@@ -142,15 +142,15 @@ test.describe('Attachments (authenticated)', () => {
     await addTextAttachment(page);
 
     // Click edit on the first attachment
-    const editBtn = page.getByRole('button', { name: 'Edit attachment' }).first();
+    const editBtn = page.getByTestId('btn-edit-attachment').first();
     if (await editBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await editBtn.scrollIntoViewIfNeeded();
       await editBtn.click();
       await page.waitForTimeout(1000);
 
       // Editor overlay should appear — look for Cancel or Done button
-      const cancelBtn = page.getByRole('button', { name: 'Cancel' });
-      const doneBtn = page.getByRole('button', { name: 'Done' });
+      const cancelBtn = page.getByTestId('btn-editor-cancel');
+      const doneBtn = page.getByTestId('btn-editor-done');
 
       // One of these should be visible
       const hasCancel = await cancelBtn.isVisible({ timeout: 3000 }).catch(() => false);
@@ -172,14 +172,14 @@ test.describe('Attachments (authenticated)', () => {
     const songName = `TypePicker ${Date.now()}`;
     await createSong(page, songName);
 
-    await page.getByText('+ Add Attachment').click();
+    await page.getByTestId('btn-add-attachment').click();
     await page.waitForTimeout(500);
 
     // Should see all attachment type options
-    await expect(page.getByRole('button', { name: 'Text', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Image', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Camera', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'PDF', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Drawing', exact: true })).toBeVisible();
+    await expect(page.getByTestId('attach-type-text')).toBeVisible();
+    await expect(page.getByTestId('attach-type-image')).toBeVisible();
+    await expect(page.getByTestId('attach-type-camera')).toBeVisible();
+    await expect(page.getByTestId('attach-type-pdf')).toBeVisible();
+    await expect(page.getByTestId('attach-type-drawing')).toBeVisible();
   });
 });

@@ -98,6 +98,7 @@ export default function PerformanceMode({
               onClick={onBack}
               className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
               aria-label="Back"
+              data-testid="btn-back"
             >
               <svg className="w-6 h-6 text-[var(--foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -119,7 +120,7 @@ export default function PerformanceMode({
           )}
 
           <div className="flex-1 text-center min-w-0">
-            <h1 className="text-lg font-bold text-[var(--foreground)] truncate">
+            <h1 className="text-lg font-bold text-[var(--foreground)] truncate" data-testid="perf-song-name">
               {song?.name || 'New Song'}
               {setlist && (
                 <span className="text-sm font-medium text-[var(--muted)] ml-2">
@@ -146,7 +147,8 @@ export default function PerformanceMode({
             <button
               onClick={onSwitchToEdit}
               className="w-11 h-11 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
-              aria-label="Edit song"
+              aria-label="Edit mode"
+              data-testid="btn-edit-mode"
             >
               <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -160,7 +162,7 @@ export default function PerformanceMode({
       <div className="flex-1 overflow-y-auto p-4 pb-20 max-w-3xl mx-auto w-full">
         {/* Metadata + dots — hidden when LiveHeader provides this info */}
         {!hideHeader && (
-          <div className="text-sm text-[var(--muted)] mb-2 text-center">
+          <div className="text-sm text-[var(--muted)] mb-2 text-center" data-testid="perf-song-info">
             {metaLine}
           </div>
         )}
@@ -171,6 +173,7 @@ export default function PerformanceMode({
               disabled={currentPage === 0}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-20 transition-colors"
               aria-label="Previous attachment"
+              data-testid="btn-prev-attachment"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -186,6 +189,7 @@ export default function PerformanceMode({
               disabled={currentPage === attachments.length - 1}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-20 transition-colors"
               aria-label="Next attachment"
+              data-testid="btn-next-attachment"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

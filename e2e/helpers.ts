@@ -3,7 +3,7 @@ import { Page, expect } from '@playwright/test';
 export async function loginAsGuest(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continue as Guest' }).click();
-  // Wait for the library tab to be visible (app loaded)
+  // Wait for the library view to load (bottom nav visible)
   await page.getByText('Library').waitFor();
 }
 
@@ -20,64 +20,58 @@ export async function loginWithTestAccount(page: Page) {
   await page.getByPlaceholder('Password').fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  // Wait for authenticated state — library tab visible
+  // Wait for authenticated state — library view visible
   await page.getByText('Library').waitFor({ timeout: 15000 });
 }
 
 export async function createSong(page: Page, name: string, bpm?: number) {
   // Click the add song FAB
   await page.getByRole('button', { name: 'Add song' }).click();
+  await page.waitForTimeout(500);
 
   // Fill in the quick add modal
   await page.getByPlaceholder('Song name').fill(name);
   if (bpm) {
-    const bpmInput = page.getByPlaceholder('120');
+    // The BPM input shows "120" as default value
+    const bpmInput = page.locator('input[type="number"]');
     if (await bpmInput.isVisible()) {
       await bpmInput.fill(String(bpm));
     }
   }
   await page.getByRole('button', { name: 'Create' }).click();
 
-  // Wait for the song view to open (edit mode)
+  // Wait for the song edit view to open (back arrow visible)
+  await page.getByLabel('Back').first().waitFor({ timeout: 5000 });
   await page.waitForTimeout(500);
 }
 
-export async function navigateToLibrary(page: Page) {
-  await page.getByText('Library').click();
+/** Navigate back from song view to library */
+export async function goBackToLibrary(page: Page) {
+  // Click the back arrow in song view header
+  const backButton = page.getByLabel('Back').first();
+  await backButton.click();
+  await page.waitForTimeout(500);
+
+  // Handle unsaved changes dialog if it appears
+  const discardButton = page.getByRole('button', { name: 'Discard' });
+  if (await discardButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await discardButton.click();
+    await page.waitForTimeout(300);
+  }
+
+  // Wait for bottom nav to be visible again
+  await page.getByText('Library').waitFor({ timeout: 5000 });
+}
+
+export async function navigateToTab(page: Page, tab: 'Library' | 'Live' | 'Settings') {
+  await page.getByText(tab, { exact: true }).click();
   await page.waitForTimeout(300);
 }
 
 export async function navigateToSettings(page: Page) {
-  await page.getByText('Settings').click();
-  await page.waitForTimeout(300);
+  await navigateToTab(page, 'Settings');
 }
 
-export async function cleanupTestUserData(_page: Page) {
-  // Test isolation relies on unique song names with timestamps.
-  // A more robust approach would use Firestore REST API to delete test data.
-}
-
-export async function waitForToast(page: Page, text: string) {
+export async function waitForToast(page: Page, text: string | RegExp) {
   await expect(page.getByText(text)).toBeVisible({ timeout: 5000 });
-}
-
-export async function deleteSongByName(page: Page, songName: string) {
-  // Long press on the song to trigger context menu (mobile)
-  // On desktop, right-click or use the context menu
-  const songItem = page.getByText(songName).first();
-
-  // Use long press for mobile-like interaction
-  await songItem.click({ button: 'right' });
-  await page.waitForTimeout(200);
-
-  // If right-click didn't show menu, try long press
-  const deleteOption = page.getByText('Delete');
-  if (await deleteOption.isVisible()) {
-    await deleteOption.click();
-    // Confirm delete dialog
-    const confirmButton = page.getByRole('button', { name: /Delete song/ });
-    if (await confirmButton.isVisible()) {
-      await confirmButton.click();
-    }
-  }
 }

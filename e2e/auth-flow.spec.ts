@@ -18,6 +18,7 @@ test.describe('Auth flow', () => {
 
     // Click sign out
     await page.getByRole('button', { name: 'Sign Out' }).click();
+    await page.waitForTimeout(300);
 
     // Confirm sign out dialog
     const confirmButton = page.getByRole('button', { name: 'Sign Out' }).last();

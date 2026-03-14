@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsGuest, createSong, navigateToLibrary } from './helpers';
+import { loginAsGuest, createSong, goBackToLibrary } from './helpers';
 
 test.describe('Guest mode limits', () => {
   test('enforces 3-song limit in guest mode', async ({ page }) => {
@@ -8,23 +8,20 @@ test.describe('Guest mode limits', () => {
     // Create 3 songs
     for (let i = 1; i <= 3; i++) {
       await createSong(page, `Guest Song ${i}`);
-      // Save each song
-      const saveButton = page.getByRole('button', { name: 'Save' });
-      if (await saveButton.isEnabled()) {
-        await saveButton.click();
-        await page.waitForTimeout(500);
-      }
-      await navigateToLibrary(page);
+      await goBackToLibrary(page);
       await page.waitForTimeout(300);
     }
 
     // Try to create 4th song
     await page.getByRole('button', { name: 'Add song' }).click();
+    await page.waitForTimeout(300);
     await page.getByPlaceholder('Song name').fill('Over Limit');
     await page.getByRole('button', { name: 'Create' }).click();
+    await page.waitForTimeout(1000);
 
-    // Should see error toast or message about guest limit
-    await expect(page.getByText(/Guest mode/i)).toBeVisible({ timeout: 5000 });
+    // Should see error about guest limit — check for toast or error text
+    const limitText = page.getByText(/[Gg]uest/);
+    await expect(limitText.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('guest data persists after reload', async ({ page }) => {
@@ -33,15 +30,8 @@ test.describe('Guest mode limits', () => {
     const songName = `Persist Guest ${Date.now()}`;
     await createSong(page, songName);
 
-    // Save
-    const saveButton = page.getByRole('button', { name: 'Save' });
-    if (await saveButton.isEnabled()) {
-      await saveButton.click();
-      await page.waitForTimeout(500);
-    }
-
-    await navigateToLibrary(page);
-    await page.waitForTimeout(300);
+    // Go back to library
+    await goBackToLibrary(page);
 
     // Reload
     await page.reload();

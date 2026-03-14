@@ -1,44 +1,50 @@
 import { test, expect } from '@playwright/test';
-import { loginWithTestAccount, createSong, navigateToLibrary } from './helpers';
+import { loginWithTestAccount, createSong, goBackToLibrary } from './helpers';
 
 test.describe('Setlist flow (authenticated)', () => {
   test.beforeEach(async ({ page }) => {
     await loginWithTestAccount(page);
   });
 
-  test('create setlist and add songs', async ({ page }) => {
-    // Create 2 songs
-    const song1 = `Setlist Song 1 ${Date.now()}`;
-    const song2 = `Setlist Song 2 ${Date.now()}`;
-
-    await createSong(page, song1);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await page.waitForTimeout(500);
-    await navigateToLibrary(page);
-
-    await createSong(page, song2);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await page.waitForTimeout(500);
-    await navigateToLibrary(page);
-
-    // Switch to Live tab
-    await page.getByText('Live').click();
+  test('create setlist from library', async ({ page }) => {
+    // Switch to Setlists sub-tab within Library
+    await page.getByText('Setlists').click();
     await page.waitForTimeout(300);
 
-    // Create setlist
+    // Click add setlist FAB
     await page.getByRole('button', { name: 'Add setlist' }).click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
-    // Fill setlist name
+    // Fill setlist name — placeholder is "e.g., Friday Night Gig"
     const setlistName = `Test Setlist ${Date.now()}`;
-    const nameInput = page.getByPlaceholder('Setlist name');
-    if (await nameInput.isVisible()) {
-      await nameInput.fill(setlistName);
-      await page.getByRole('button', { name: 'Create' }).click();
-      await page.waitForTimeout(500);
-    }
+    await page.getByPlaceholder('e.g., Friday Night Gig').fill(setlistName);
+    await page.getByRole('button', { name: 'Create' }).click();
+    await page.waitForTimeout(500);
 
     // Verify setlist appears
+    await expect(page.getByText(setlistName)).toBeVisible({ timeout: 5000 });
+  });
+
+  test('create songs then create setlist', async ({ page }) => {
+    // Create a song first
+    const songName = `Setlist Song ${Date.now()}`;
+    await createSong(page, songName);
+    await goBackToLibrary(page);
+
+    // Switch to Setlists tab
+    await page.getByText('Setlists').click();
+    await page.waitForTimeout(300);
+
+    // Create a setlist
+    await page.getByRole('button', { name: 'Add setlist' }).click();
+    await page.waitForTimeout(500);
+
+    const setlistName = `My Setlist ${Date.now()}`;
+    await page.getByPlaceholder('e.g., Friday Night Gig').fill(setlistName);
+    await page.getByRole('button', { name: 'Create' }).click();
+    await page.waitForTimeout(500);
+
+    // Verify setlist was created
     await expect(page.getByText(setlistName)).toBeVisible({ timeout: 5000 });
   });
 });

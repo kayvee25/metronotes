@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from './ui/Toast';
 import { migrateNotesToAttachment } from '../lib/migration';
 import { compressImage, validateFileSize, validateSongStorage } from '../lib/image-processing';
-import { saveGuestBlob, deleteGuestBlob, getGuestBlob } from '../lib/guest-blob-storage';
+import { saveGuestBlob } from '../lib/guest-blob-storage';
 import { validateAudioFile, extractAudioDuration } from '../lib/audio-processing';
 import { uploadAttachmentFile, getStoragePath } from '../lib/storage-firebase';
 import { loadPdfJs } from '../lib/pdf-loader';
@@ -18,7 +18,6 @@ import { firestoreGetAttachments } from '../lib/firestore';
 import { BPM, TIME_SIGNATURE } from '../lib/constants';
 import { useCloudProvider } from '../hooks/useCloudProvider';
 import { cloudMimeToAttachmentType, isCloudLinked } from '../lib/cloud-providers/types';
-import type { CloudProviderId } from '../lib/cloud-providers/types';
 import PerformanceMode from './song/PerformanceMode';
 import EditMode from './song/EditMode';
 import TimeSignatureModal from './song/TimeSignatureModal';
@@ -255,7 +254,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   onTransportUpdate,
   onModeChange,
   onBeat,
-  readOnly = false,
+  readOnly: _readOnly = false,
   externalAttachments,
 }, ref) {
   const { authState, user } = useAuth();
@@ -380,12 +379,12 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   const setName = (name: string) => setFormState(s => ({ ...s, name }));
   const setArtist = (artist: string) => setFormState(s => ({ ...s, artist }));
   const setMusicalKey = (musicalKey: string) => setFormState(s => ({ ...s, musicalKey }));
-  const setMode = (mode: Mode) => {
+  const setMode = useCallback((mode: Mode) => {
     setFormState(s => ({ ...s, mode }));
     onModeChange?.(mode);
-  };
+  }, [onModeChange]);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     const clampedBpm = Math.max(BPM.MIN, Math.min(BPM.MAX, bpm));
     if (song) {
       onSave({
@@ -418,7 +417,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
           });
       }
     }
-  };
+  }, [song, name, artist, bpm, timeSignature, musicalKey, audioMode, onSave]);
 
   const handleSaveWithName = () => {
     if (!name.trim()) return;
@@ -701,7 +700,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
   // Cloud Drive import
   const { openPicker, isAvailable: cloudAvailable } = useCloudProvider('google-drive');
 
-  const handleAddFromCloud = useCallback(async (_providerId: CloudProviderId) => {
+  const handleAddFromCloud = useCallback(async () => {
     if (isGuest) {
       toast('Sign in with Google to import from Drive');
       return;
@@ -738,7 +737,7 @@ const SongView = forwardRef<SongViewHandle, SongViewProps>(function SongView({
     });
   }, [isGuest, songId, userId, openPicker, attachments.length, addImage, toast]);
 
-  const handleAddAudioFromCloud = useCallback(async (_providerId: CloudProviderId) => {
+  const handleAddAudioFromCloud = useCallback(async () => {
     if (isGuest) {
       toast('Sign in with Google to import from Drive');
       return;

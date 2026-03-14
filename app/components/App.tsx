@@ -474,10 +474,6 @@ function AppInner() {
     [hostSession, isGuest, user?.uid, assets, toast]
   );
 
-  const handleSwitchToLibrary = () => {
-    setActiveTab('library');
-  };
-
   const handleHostNavigateToSong = useCallback((queueIndex: number) => {
     hostSession.navigateToSong(queueIndex);
     const queueItem = hostSession.session?.queue[queueIndex];

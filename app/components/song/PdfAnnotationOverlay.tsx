@@ -222,6 +222,7 @@ export default function PdfAnnotationOverlay({
       cancelled = true;
       renderTask?.cancel();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- containerRef is a stable ref
   }, [pdf, currentPage]);
 
   // Sync content size to useZoomPan for proper pan clamping

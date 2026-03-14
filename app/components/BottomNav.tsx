@@ -64,6 +64,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
+              data-testid={`nav-${tab.id}`}
               className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
                 activeTab === tab.id
                   ? 'text-[var(--accent)]'

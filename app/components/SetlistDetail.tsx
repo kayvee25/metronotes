@@ -119,6 +119,7 @@ function SortableSongItem({ song, index, onPlay, onRemove }: SortableSongItemPro
       {/* Remove button */}
       <button
         onClick={onRemove}
+        data-testid="btn-remove-from-setlist"
         className="w-8 h-8 rounded-lg hover:bg-[var(--accent-danger)]/10 flex items-center justify-center transition-colors flex-shrink-0"
         aria-label="Remove from setlist"
       >
@@ -269,6 +270,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay, updateSe
       <header className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)]">
         <button
           onClick={onBack}
+          data-testid="btn-back"
           className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
           aria-label="Back"
         >
@@ -283,8 +285,8 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay, updateSe
           </svg>
         </button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-[var(--foreground)]">{currentSetlist.name}</h1>
-          <p className="text-sm text-[var(--muted)]">{setlistSongs.length} songs</p>
+          <h1 data-testid="setlist-heading" className="text-xl font-bold text-[var(--foreground)]">{currentSetlist.name}</h1>
+          <p data-testid="setlist-song-count" className="text-sm text-[var(--muted)]">{setlistSongs.length} songs</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Download for offline */}
@@ -368,6 +370,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay, updateSe
             <p className="text-[var(--muted)] mb-4">No songs in this setlist</p>
             <button
               onClick={() => setShowSongPicker(true)}
+              data-testid="btn-add-songs"
               className="px-4 py-2 bg-[var(--accent)] text-white rounded-xl font-medium hover:brightness-110 active:scale-95 transition-all"
             >
               Add songs
@@ -404,6 +407,7 @@ export default function SetlistDetail({ setlist, songs, onBack, onPlay, updateSe
         <div className="px-4 pb-20">
           <button
             onClick={() => setShowSongPicker(true)}
+            data-testid="btn-add-songs"
             className="w-full h-12 rounded-xl bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] text-[var(--foreground)] font-medium transition-all active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <svg

@@ -65,7 +65,7 @@ function SortableCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div ref={setNodeRef} style={style} {...attributes} data-testid="attachment-item">
       <AttachmentCard
         attachment={attachment}
         onEdit={onEdit}
@@ -123,6 +123,7 @@ export default function AttachmentList({
     <Modal isOpen={showAddMenu} onClose={() => setShowAddMenu(false)} title="Add Attachment">
       <div className="space-y-1.5 -mt-2">
         <button
+          data-testid="attach-type-text"
           onClick={() => { onAddText(); setShowAddMenu(false); }}
           className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--background)] active:scale-[0.98] transition-all"
         >
@@ -134,6 +135,7 @@ export default function AttachmentList({
           <span className="text-sm font-medium text-[var(--foreground)]">Text</span>
         </button>
         <button
+          data-testid="attach-type-image"
           onClick={() => { onAddImage(); setShowAddMenu(false); }}
           className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--background)] active:scale-[0.98] transition-all"
         >
@@ -145,6 +147,7 @@ export default function AttachmentList({
           <span className="text-sm font-medium text-[var(--foreground)]">Image</span>
         </button>
         <button
+          data-testid="attach-type-camera"
           onClick={() => { onAddCamera(); setShowAddMenu(false); }}
           className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--background)] active:scale-[0.98] transition-all"
         >
@@ -157,6 +160,7 @@ export default function AttachmentList({
           <span className="text-sm font-medium text-[var(--foreground)]">Camera</span>
         </button>
         <button
+          data-testid="attach-type-pdf"
           onClick={() => { onAddPdf(); setShowAddMenu(false); }}
           className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--background)] active:scale-[0.98] transition-all"
         >
@@ -169,6 +173,7 @@ export default function AttachmentList({
           <span className="text-sm font-medium text-[var(--foreground)]">PDF</span>
         </button>
         <button
+          data-testid="attach-type-drawing"
           onClick={() => { onAddDrawing(); setShowAddMenu(false); }}
           className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--background)] active:scale-[0.98] transition-all"
         >
@@ -209,11 +214,12 @@ export default function AttachmentList({
   if (attachments.length === 0) {
     return (
       <div className="p-4">
-        <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
+        <label data-testid="section-attachments" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
           Attachments
         </label>
         <p className="text-sm text-[var(--muted)] mb-3">Add sheet music, chord charts, lyrics, or reference images</p>
         <button
+          data-testid="btn-add-attachment"
           onClick={() => setShowAddMenu(true)}
           className="w-full py-3 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--muted)] font-medium text-sm hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2"
         >
@@ -229,7 +235,7 @@ export default function AttachmentList({
 
   return (
     <div className="p-4">
-      <label className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
+      <label data-testid="section-attachments" className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider block mb-3">
         Attachments
       </label>
 
@@ -259,6 +265,7 @@ export default function AttachmentList({
       {/* Add button */}
       <div className="mt-3">
         <button
+          data-testid="btn-add-attachment"
           onClick={() => setShowAddMenu(true)}
           className="w-full py-2.5 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--muted)] font-medium text-sm hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2"
         >

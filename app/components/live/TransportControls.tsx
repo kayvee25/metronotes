@@ -42,6 +42,7 @@ const BeatButton = memo(function BeatButton({
           : 'bg-[var(--accent)] text-white shadow-md'
       }`}
       aria-label={isPlaying ? 'Stop' : 'Play'}
+      data-testid={isPlaying ? 'btn-stop' : 'btn-play'}
     >
       {isPlaying ? (
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -201,6 +202,7 @@ export default function TransportControls({
                 roVolume === 0 ? 'text-red-400' : 'text-[var(--muted)]'
               }`}
               aria-label="Volume"
+              data-testid="btn-volume"
             >
               {roVolume === 0 ? (
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -402,6 +404,7 @@ export default function TransportControls({
               onClick={() => setShowSourcePicker(!showSourcePicker)}
               className="w-9 h-9 rounded-lg hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center text-[var(--muted)]"
               aria-label="Audio source"
+              data-testid="btn-audio-source"
             >
               {sourceIcon}
             </button>
@@ -425,6 +428,7 @@ export default function TransportControls({
                 onClick={() => setShowSourcePicker(!showSourcePicker)}
                 className="w-9 h-9 rounded-lg hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center text-[var(--accent)]"
                 aria-label="Audio source"
+              data-testid="btn-audio-source"
               >
                 {sourceIcon}
               </button>
@@ -439,6 +443,7 @@ export default function TransportControls({
                   volumeValue === 0 ? 'text-red-400' : 'text-[var(--muted)]'
                 }`}
                 aria-label="Volume"
+                data-testid="btn-volume"
               >
                 {volumeIcon}
               </button>
@@ -453,6 +458,7 @@ export default function TransportControls({
               disabled={bpm <= BPM.MIN}
               className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card)] disabled:opacity-30 transition-all active:scale-95"
               aria-label="Decrease tempo"
+              data-testid="btn-decrease-tempo"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
@@ -466,6 +472,7 @@ export default function TransportControls({
               disabled={bpm >= BPM.MAX}
               className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card)] disabled:opacity-30 transition-all active:scale-95"
               aria-label="Increase tempo"
+              data-testid="btn-increase-tempo"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -504,6 +511,7 @@ export default function TransportControls({
               onClick={() => setShowSourcePicker(!showSourcePicker)}
               className="w-9 h-9 rounded-lg hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center text-[var(--accent)]"
               aria-label="Audio source"
+              data-testid="btn-audio-source"
             >
               {sourceIcon}
             </button>
@@ -542,6 +550,7 @@ export default function TransportControls({
                 : 'bg-[var(--accent)] text-white shadow-md'
             }`}
             aria-label={btIsPlaying ? 'Pause' : 'Play'}
+            data-testid={btIsPlaying ? 'btn-stop' : 'btn-play'}
           >
             {btIsPlaying ? (
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

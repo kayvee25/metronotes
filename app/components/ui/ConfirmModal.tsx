@@ -62,6 +62,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <div className="flex gap-3">
               <button
                 onClick={() => handleClose(false)}
+                data-testid="btn-confirm-cancel"
                 className="flex-1 h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
               >
                 {options.cancelLabel || 'Cancel'}
@@ -69,6 +70,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               <button
                 onClick={() => handleClose(true)}
                 autoFocus
+                data-testid="btn-confirm-ok"
                 className={`flex-1 h-12 rounded-xl font-semibold transition-all active:scale-95 ${
                   options.variant === 'danger'
                     ? 'bg-[var(--accent-danger)] hover:brightness-110 text-white'

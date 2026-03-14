@@ -122,12 +122,14 @@ export default function RichTextEditor({
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <button
+          data-testid="btn-editor-cancel"
           onClick={handleCancel}
           className="text-[var(--muted)] font-medium text-sm hover:text-[var(--foreground)] transition-colors"
         >
           Cancel
         </button>
         <button
+          data-testid="btn-editor-done"
           onClick={handleDone}
           disabled={!editorDirty}
           className={`px-4 py-1.5 rounded-xl bg-[var(--accent)] text-white font-semibold text-sm transition-all ${

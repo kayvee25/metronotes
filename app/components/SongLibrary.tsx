@@ -147,6 +147,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search songs..."
+            data-testid="input-search-songs"
             className="w-full pl-10 pr-4 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
@@ -155,6 +156,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
             onClick={() => setShowSortMenu(!showSortMenu)}
             className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
             aria-label="Sort songs"
+            data-testid="btn-sort-songs"
           >
             <svg className="w-5 h-5 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
@@ -166,6 +168,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
                 <button
                   key={option.value}
                   onClick={() => handleSortChange(option.value)}
+                  data-testid={`sort-${option.value}`}
                   className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                     sortOption === option.value
                       ? 'text-[var(--accent)] bg-[var(--accent)]/10 font-medium'
@@ -243,7 +246,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
                   },
                 ]}
               >
-                <div className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer">
+                <div className="w-full flex items-center gap-3 px-3 py-3 bg-[var(--background)] active:bg-[var(--card)] transition-colors text-left border-b border-[var(--border)] cursor-pointer" data-testid="song-item">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-[var(--foreground)] truncate">{song.name}</h3>
                     {song.artist && (
@@ -270,6 +273,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
         onClick={() => setShowQuickAdd(true)}
         className="fixed bottom-[80px] right-4 w-14 h-14 rounded-2xl bg-[var(--accent)] text-white shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center z-40"
         aria-label="Add song"
+        data-testid="btn-add-song"
       >
         <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -288,6 +292,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
               value={qaName}
               onChange={(e) => setQaName(e.target.value)}
               placeholder="Song name"
+              data-testid="input-song-name"
               className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
               autoFocus
             />
@@ -303,6 +308,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
               pattern="[0-9]*"
               value={qaBpm}
               onChange={(e) => setQaBpm(e.target.value.replace(/\D/g, ''))}
+              data-testid="input-bpm-modal"
               className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
             />
           </div>
@@ -333,6 +339,7 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
           <button
             onClick={handleQuickAdd}
             disabled={!qaName.trim()}
+            data-testid="btn-create-song"
             className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50"
           >
             Create
@@ -348,12 +355,14 @@ export default function SongLibrary({ songs, isLoading, error, deleteSong, refre
         <div className="flex flex-col gap-2">
           <button
             onClick={() => handleDeleteConfirm(false)}
+            data-testid="btn-confirm-delete"
             className="w-full h-12 rounded-xl bg-[var(--accent-danger)] hover:brightness-110 text-white font-semibold transition-all active:scale-95"
           >
             Delete song and files
           </button>
           <button
             onClick={() => handleDeleteConfirm(true)}
+            data-testid="btn-confirm-delete-keep-files"
             className="w-full h-12 rounded-xl bg-[var(--card)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold transition-all active:scale-95"
           >
             Delete song, keep files

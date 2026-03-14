@@ -44,6 +44,7 @@ export default function SetlistForm({ setlist, onSubmit, onCancel }: SetlistForm
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Friday Night Gig"
+              data-testid="input-setlist-name"
               className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)]"
               autoFocus
             />
@@ -60,6 +61,7 @@ export default function SetlistForm({ setlist, onSubmit, onCancel }: SetlistForm
             <button
               type="submit"
               disabled={!name.trim()}
+              data-testid="btn-create-setlist"
               className="flex-1 h-12 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isEditing ? 'Save' : 'Create'}

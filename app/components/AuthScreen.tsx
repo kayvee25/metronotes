@@ -95,6 +95,7 @@ export default function AuthScreen() {
 
             <button
               onClick={() => switchView('email-signin')}
+              data-testid="btn-email-signin"
               className="w-full h-12 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-[0.98] transition-all"
             >
               Sign in with Email
@@ -111,6 +112,7 @@ export default function AuthScreen() {
 
             <button
               onClick={continueAsGuest}
+              data-testid="btn-guest"
               className="w-full h-12 rounded-xl bg-[var(--card)] text-[var(--muted)] font-medium hover:bg-[var(--border)] active:scale-[0.98] transition-all"
             >
               Continue as Guest
@@ -148,6 +150,7 @@ export default function AuthScreen() {
             <button
               onClick={handleEmailSignIn}
               disabled={!email.trim() || !password || isSubmitting}
+              data-testid="btn-signin-submit"
               className="w-full h-12 rounded-xl bg-[var(--accent)] text-white font-semibold hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {isSubmitting ? 'Signing in...' : 'Sign In'}

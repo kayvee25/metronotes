@@ -133,6 +133,7 @@ export default function EditMode({
             onClick={onBack}
             className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
             aria-label="Back"
+            data-testid="btn-back"
           >
             <svg
               className="w-6 h-6 text-[var(--foreground)]"
@@ -158,6 +159,7 @@ export default function EditMode({
                   value={name}
                   onChange={(e) => onNameChange(e.target.value)}
                   placeholder="Song name"
+                  data-testid="input-song-name-edit"
                   className="absolute inset-0 w-full text-lg font-bold bg-transparent text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none"
                 />
               </div>
@@ -181,6 +183,7 @@ export default function EditMode({
           onClick={onSwitchToPerformance}
           className="w-10 h-10 rounded-xl hover:bg-[var(--card)] active:scale-95 transition-all flex items-center justify-center"
           aria-label="Performance mode"
+          data-testid="btn-performance-mode"
         >
           <svg
             className="w-5 h-5 text-[var(--muted)]"
@@ -200,6 +203,7 @@ export default function EditMode({
         <button
           onClick={onSave}
           disabled={!isDirty}
+          data-testid="btn-save-song"
           className={`px-4 py-2 rounded-xl bg-[var(--accent)] text-white font-semibold transition-all ${
             isDirty ? 'active:scale-95' : 'opacity-50 pointer-events-none'
           }`}
@@ -236,6 +240,7 @@ export default function EditMode({
               onClick={() => onBpmChange(bpm - 1)}
               className="w-6 h-12 flex-shrink-0 rounded-l-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] active:scale-95 transition-all flex items-center justify-center"
               aria-label="Decrease BPM"
+              data-testid="btn-decrease-bpm"
             >
               <svg
                 className="w-3 h-3 text-[var(--foreground)]"
@@ -263,6 +268,7 @@ export default function EditMode({
                 }}
                 className="w-full text-center text-lg font-bold bg-transparent text-[var(--foreground)] focus:outline-none leading-tight"
                 aria-label="BPM"
+                data-testid="input-bpm"
               />
               <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">
                 BPM
@@ -273,6 +279,7 @@ export default function EditMode({
               onClick={() => onBpmChange(bpm + 1)}
               className="w-6 h-12 flex-shrink-0 rounded-r-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--border)] active:scale-95 transition-all flex items-center justify-center"
               aria-label="Increase BPM"
+              data-testid="btn-increase-bpm"
             >
               <svg
                 className="w-3 h-3 text-[var(--foreground)]"

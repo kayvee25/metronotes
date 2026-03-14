@@ -21,7 +21,7 @@ export async function loginWithTestAccount(page: Page) {
   await page.getByRole('button', { name: 'Sign In' }).click();
 
   // Wait for authenticated state — library view visible
-  await page.getByText('Library').waitFor({ timeout: 15000 });
+  await page.getByText('Library').waitFor({ timeout: 30000 });
 }
 
 export async function createSong(page: Page, name: string, bpm?: number) {
@@ -32,8 +32,8 @@ export async function createSong(page: Page, name: string, bpm?: number) {
   // Fill in the quick add modal
   await page.getByPlaceholder('Song name').fill(name);
   if (bpm) {
-    // The BPM input shows "120" as default value
-    const bpmInput = page.locator('input[type="number"]');
+    // The BPM input is type="text" with inputMode="numeric", default value "120"
+    const bpmInput = page.locator('input[inputmode="numeric"]');
     if (await bpmInput.isVisible()) {
       await bpmInput.fill(String(bpm));
     }

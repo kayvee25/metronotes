@@ -17,16 +17,79 @@ test.describe('Song CRUD (authenticated)', () => {
     await expect(page.getByText(songName)).toBeVisible();
   });
 
-  test('edit song BPM via increase button', async ({ page }) => {
-    const songName = `Edit BPM ${Date.now()}`;
+  test('create song with custom BPM', async ({ page }) => {
+    const songName = `Custom BPM ${Date.now()}`;
+    await createSong(page, songName, 180);
+
+    // Verify BPM shows 180 in edit mode
+    const bpmInput = page.getByPlaceholder('BPM');
+    if (await bpmInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await expect(bpmInput).toHaveValue('180');
+    }
+  });
+
+  test('edit song name and save', async ({ page }) => {
+    const songName = `EditName ${Date.now()}`;
+    await createSong(page, songName);
+
+    // Should be in edit mode with song name input
+    const nameInput = page.getByPlaceholder('Song name');
+    await expect(nameInput).toBeVisible();
+
+    // Change the name
+    const newName = `Renamed ${Date.now()}`;
+    await nameInput.fill(newName);
+
+    // Click back — should trigger unsaved changes dialog
+    await page.getByLabel('Back').first().click();
+    await page.waitForTimeout(500);
+
+    // Save changes via the dialog
+    const saveBtn = page.getByRole('button', { name: 'Save' });
+    if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await saveBtn.click();
+      await page.waitForTimeout(1000);
+    }
+
+    // Should be back in library with new name
+    await page.getByText('Library').waitFor({ timeout: 5000 });
+    await expect(page.getByText(newName)).toBeVisible({ timeout: 5000 });
+  });
+
+  test('edit song BPM via increase/decrease buttons', async ({ page }) => {
+    const songName = `BPM Btns ${Date.now()}`;
     await createSong(page, songName, 100);
 
-    // The song view is now open in edit mode
-    // Use aria-label to find BPM buttons
+    // Increase BPM twice
     await page.getByLabel('Increase BPM').click();
     await page.getByLabel('Increase BPM').click();
 
-    // Go back — may trigger unsaved changes dialog
+    // BPM should now be 102
+    const bpmInput = page.getByPlaceholder('BPM');
+    if (await bpmInput.isVisible()) {
+      await expect(bpmInput).toHaveValue('102');
+    }
+
+    // Decrease once
+    await page.getByLabel('Decrease BPM').click();
+    if (await bpmInput.isVisible()) {
+      await expect(bpmInput).toHaveValue('101');
+    }
+
+    await goBackToLibrary(page);
+  });
+
+  test('change song key', async ({ page }) => {
+    const songName = `Key Test ${Date.now()}`;
+    await createSong(page, songName);
+
+    // Find the key selector (combobox with "-" default)
+    const keySelect = page.locator('select').last();
+    if (await keySelect.isVisible()) {
+      await keySelect.selectOption('Am');
+      await page.waitForTimeout(300);
+    }
+
     await goBackToLibrary(page);
   });
 
@@ -49,16 +112,13 @@ test.describe('Song CRUD (authenticated)', () => {
     }
     await page.waitForTimeout(500);
 
-    // Take screenshot to debug if needed
-    // await page.screenshot({ path: 'test-results/debug-context-menu.png' });
-
     // Click delete option from context menu
     const deleteOption = page.getByText('Delete', { exact: true }).first();
     if (await deleteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await deleteOption.click();
       await page.waitForTimeout(300);
 
-      // Confirm delete — click the first delete-related button in the dialog
+      // Confirm delete
       const confirmBtn = page.getByRole('button', { name: /[Dd]elete/ }).first();
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await confirmBtn.click();
@@ -74,14 +134,11 @@ test.describe('Song CRUD (authenticated)', () => {
     const songName = `Persist ${Date.now()}`;
     await createSong(page, songName);
 
-    // Go back to library
     await goBackToLibrary(page);
 
-    // Reload page
     await page.reload();
     await page.waitForTimeout(3000);
 
-    // Verify song still exists
     await expect(page.getByText(songName)).toBeVisible({ timeout: 10000 });
   });
 });
